@@ -7,7 +7,6 @@ class DataManager {
 
   loadData() {
     if (typeof window === 'undefined') return this.getDefaultData();
-    
     try {
       const stored = localStorage.getItem(this.storageKey);
       return stored ? JSON.parse(stored) : this.getDefaultData();
@@ -19,7 +18,6 @@ class DataManager {
 
   saveData() {
     if (typeof window === 'undefined') return;
-    
     try {
       localStorage.setItem(this.storageKey, JSON.stringify(this.data));
     } catch (error) {
@@ -71,6 +69,20 @@ class DataManager {
     return null;
   }
 
+  deleteMatch(matchId) {
+    this.data.matches = this.data.matches.filter(m => m.id !== matchId);
+    this.saveData();
+  }
+
+  clearAllMatches(week = null) {
+    if (week) {
+      this.data.matches = this.data.matches.filter(m => m.week !== week);
+    } else {
+      this.data.matches = [];
+    }
+    this.saveData();
+  }
+
   // ניהול משתמשים
   getUsers() {
     return this.data.users;
@@ -112,12 +124,12 @@ class DataManager {
       createdAt: new Date().toISOString(),
       ...guess
     };
-    
+
     // מחיקת ניחוש קודם אם קיים
     this.data.userGuesses = this.data.userGuesses.filter(
       g => !(g.userId === newGuess.userId && g.week === newGuess.week)
     );
-    
+
     this.data.userGuesses.push(newGuess);
     this.saveData();
     return newGuess;
@@ -146,7 +158,7 @@ class DataManager {
           score++;
         }
       });
-      
+
       if (guess.score !== score) {
         this.updateUserGuess(guess.id, { score });
       }
@@ -196,7 +208,7 @@ class DataManager {
   createDefaultMatches(week = null) {
     const targetWeek = week || this.data.currentWeek;
     const existingMatches = this.getMatches(targetWeek);
-    
+
     if (existingMatches.length >= 16) return existingMatches;
 
     const newMatches = [];
@@ -230,21 +242,5 @@ class DataManager {
 }
 
 // יצירת instance גלובלי
-const dataManager = new DataManager();
-
-export default dataManager;
-
-
-  deleteMatch(matchId) {
-    this.data.matches = this.data.matches.filter(m => m.id !== matchId);
-    this.saveData();
-  }
-
-  clearAllMatches() {
-    this.data.matches = [];
-    this.saveData();
-  }
-}
-
 const dataManager = new DataManager();
 export default dataManager;
