@@ -233,3 +233,18 @@ class DataManager {
 const dataManager = new DataManager();
 
 export default dataManager;
+
+
+  deleteMatch(matchId) {
+    this.data.matches = this.data.matches.filter(m => m.id !== matchId);
+    this.saveData();
+  }
+
+  clearAllMatches() {
+    this.data.matches = [];
+    this.saveData();
+  }
+}
+
+const dataManager = new DataManager();
+export default dataManager;
