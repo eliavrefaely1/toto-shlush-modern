@@ -1,4 +1,9 @@
 import { kv } from '@vercel/kv'
+
+// Ensure fresh responses and run on Edge for low latency
+export const runtime = 'edge'
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 import { Redis } from '@upstash/redis';
 import { NextResponse } from 'next/server';
 
@@ -29,10 +34,14 @@ export const POST = async () => {
 export async function GET() {
   try {
     const data = await kv.get(KEY)
-    return Response.json(data || defaultData)
+    return Response.json(data || defaultData, {
+      headers: { 'Cache-Control': 'no-store' }
+    })
   } catch (err) {
     // אם אין KV מוגדר, נחזיר ברירת מחדל כדי שלא יישבר
-    return Response.json(defaultData)
+    return Response.json(defaultData, {
+      headers: { 'Cache-Control': 'no-store' }
+    })
   }
 }
 
@@ -40,9 +49,10 @@ export async function PUT(req) {
   try {
     const data = await req.json()
     await kv.set(KEY, data)
-    return Response.json({ ok: true })
+    return Response.json({ ok: true }, {
+      headers: { 'Cache-Control': 'no-store' }
+    })
   } catch (err) {
     return new Response(JSON.stringify({ ok: false, error: 'KV not available' }), { status: 503 })
   }
 }
-
