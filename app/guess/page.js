@@ -19,8 +19,11 @@ export default function GuessPage() {
 
   useEffect(() => {
     // טעינת משחקים
-    const currentMatches = dataManager.getMatches()
-    setMatches(currentMatches)
+    (async () => {
+      await dataManager.syncFromServer()
+      const currentMatches = dataManager.getMatches()
+      setMatches(currentMatches)
+    })()
   }, [])
 
   const handleInputChange = (field, value) => {

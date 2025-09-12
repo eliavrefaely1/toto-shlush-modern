@@ -23,7 +23,10 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      loadAdminData();
+      (async () => {
+        await dataManager.syncFromServer();
+        loadAdminData();
+      })();
     }
   }, [isAuthenticated]);
 

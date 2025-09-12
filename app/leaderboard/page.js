@@ -12,7 +12,10 @@ export default function LeaderboardPage() {
   const [availableWeeks, setAvailableWeeks] = useState([1])
 
   useEffect(() => {
-    loadData()
+    (async () => {
+      await dataManager.syncFromServer()
+      loadData()
+    })()
   }, [selectedWeek])
 
   const loadData = () => {

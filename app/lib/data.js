@@ -26,6 +26,12 @@ class DataManager {
     if (typeof window === 'undefined') return;
     try {
       localStorage.setItem(this.storageKey, JSON.stringify(this.data));
+      // סנכרון לשרת (לא חוסם)
+      fetch('/api/data', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(this.data)
+      }).catch(() => {})
     } catch (error) {
       console.error('Error saving data:', error);
     }
@@ -84,6 +90,23 @@ class DataManager {
       userGuesses: [],
       pots: []
     };
+  }
+
+  // סנכרון מהשרת (KV) ללקוח
+  async syncFromServer() {
+    try {
+      const res = await fetch('/api/data', { cache: 'no-store' })
+      if (!res.ok) return;
+      const serverData = await res.json()
+      if (serverData && typeof serverData === 'object') {
+        this.data = { ...this.getDefaultData(), ...serverData }
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(this.storageKey, JSON.stringify(this.data))
+        }
+      }
+    } catch (e) {
+      // אם אין שרת, נתעלם ונמשיך עם localStorage
+    }
   }
 
   // ניהול משחקים
