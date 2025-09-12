@@ -290,7 +290,7 @@ export default function AdminPage() {
         </div>
         <div className="card mb-6">
           <div className="card-content p-0">
-            <div className="flex border-b">
+            <div className="flex flex-wrap border-b">
               {[
                 { id: 'matches', label: 'משחקים', icon: Trophy },
                 { id: 'results', label: 'תוצאות', icon: Users },
@@ -300,14 +300,14 @@ export default function AdminPage() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex-1 px-6 py-4 text-center font-medium transition-all flex flex-col items-center justify-center ${
+                  className={`w-1/2 sm:flex-1 px-4 py-3 text-center font-medium transition-all flex flex-col items-center justify-center ${
                     activeTab === tab.id
                       ? 'bg-blue-500 text-white border-b-2 border-blue-600'
                       : 'text-gray-700 hover:bg-gray-50'
                   }`}
                 >
                   <tab.icon className="w-5 h-5 mb-1" />
-                  <span className="text-sm">{tab.label}</span>
+                  <span className="text-sm truncate">{tab.label}</span>
                 </button>
               ))}
             </div>
