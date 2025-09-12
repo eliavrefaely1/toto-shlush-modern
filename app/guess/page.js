@@ -19,13 +19,7 @@ export default function GuessPage() {
 
   useEffect(() => {
     // טעינת משחקים
-    let currentMatches = dataManager.getMatches()
-    
-    // אם אין משחקים, יצירת 16 משחקים ברירת מחדל
-    if (currentMatches.length === 0) {
-      currentMatches = dataManager.createDefaultMatches()
-    }
-    
+    const currentMatches = dataManager.getMatches()
     setMatches(currentMatches)
   }, [])
 
@@ -131,7 +125,16 @@ export default function GuessPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-green-100" dir="rtl">
+    <div className="min-h-screen relative overflow-x-hidden" dir="rtl">
+      {/* רקע עם אלמנטים צפים */}
+      <div className="football-bg absolute inset-0" />
+      <div className="money-floating" style={{top: '10%', left: '5%', animationDelay: '0s'}}>💰</div>
+      <div className="money-floating" style={{top: '20%', right: '10%', animationDelay: '2s'}}>💵</div>
+      <div className="money-floating" style={{top: '60%', left: '15%', animationDelay: '4s'}}>💷</div>
+      <div className="money-floating" style={{top: '40%', right: '5%', animationDelay: '1s'}}>💶</div>
+      <div className="money-floating" style={{top: '80%', left: '25%', animationDelay: '3s'}}>⚽</div>
+      
+      <div className="relative z-10">
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* כותרת */}
         <div className="text-center mb-8">
@@ -308,6 +311,7 @@ export default function GuessPage() {
             </button>
           </div>
         </form>
+      </div>
       </div>
     </div>
   )

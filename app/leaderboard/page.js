@@ -47,7 +47,7 @@ export default function LeaderboardPage() {
     if (score >= 12) return "מעולה! אתה בדרך הנכונה! 🚀"
     if (score >= 8) return "לא רע בכלל! עוד קצת ואתה שם! 💪"
     if (score >= 4) return "יש לך פוטנציאל! תמשיך לנסות! 🎯"
-    return "יצאת עגל! אבל יש לך עוד הזדמנויות! 🐄"
+    return "יצאת עגל – 3 ניחושים השבוע? 🐄"
   }
 
   const getScoreEmoji = (score) => {
@@ -59,7 +59,16 @@ export default function LeaderboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 via-white to-green-100" dir="rtl">
+    <div className="min-h-screen relative overflow-x-hidden" dir="rtl">
+      {/* רקע עם אלמנטים צפים */}
+      <div className="football-bg absolute inset-0" />
+      <div className="money-floating" style={{top: '10%', left: '5%', animationDelay: '0s'}}>💰</div>
+      <div className="money-floating" style={{top: '20%', right: '10%', animationDelay: '2s'}}>💵</div>
+      <div className="money-floating" style={{top: '60%', left: '15%', animationDelay: '4s'}}>💷</div>
+      <div className="money-floating" style={{top: '40%', right: '5%', animationDelay: '1s'}}>💶</div>
+      <div className="money-floating" style={{top: '80%', left: '25%', animationDelay: '3s'}}>⚽</div>
+      
+      <div className="relative z-10">
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* כותרת */}
         <div className="text-center mb-8">
@@ -193,6 +202,7 @@ export default function LeaderboardPage() {
             מלא טופס חדש
           </Link>
         </div>
+      </div>
       </div>
     </div>
   )

@@ -18,16 +18,18 @@ export default function Home() {
     setPot(currentPot)
     setLeaderboard(currentLeaderboard)
 
-    // משפט מוטיבציה
+    // משפט מוטיבציה לפי האיפיון
     const quotes = [
       "לטוטו שלוש הגעת – את הקופה כמעט לקחת! 🎯",
-      "מי שלא מנחש הרבה, יצאת עגל! 🐄",
+      "יצאת עגל – 3 ניחושים השבוע? 🐄",
       "הכסף קורא לך - תענה! 💰",
       "עוד משחק אחד נכון ואתה במקום הראשון! 🏆",
       "הקופה מחכה לזוכה החכם! 💼",
       "טוטו זה לא מזל, זה כישרון! ⚽",
       "16 נכונים = הקופה שלך! 🎉",
-      "כל ניחוש נכון = צעד לקופה! 👑"
+      "כל ניחוש נכון = צעד לקופה! 👑",
+      "מי שלא מנחש הרבה, יצאת עגל! 🐄",
+      "הקופה גדלה - הזמן לנחש! 💵"
     ]
     
     setMotivationalQuote(quotes[Math.floor(Math.random() * quotes.length)])
@@ -38,7 +40,7 @@ export default function Home() {
     if (score >= 12) return "מעולה! אתה בדרך הנכונה! 🚀"
     if (score >= 8) return "לא רע בכלל! עוד קצת ואתה שם! 💪"
     if (score >= 4) return "יש לך פוטנציאל! תמשיך לנסות! 🎯"
-    return "יצאת עגל! אבל יש לך עוד הזדמנויות! 🐄"
+    return "יצאת עגל – 3 ניחושים השבוע? 🐄"
   }
 
   return (
@@ -61,8 +63,8 @@ export default function Home() {
                   <Trophy className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold text-green-800">טוטו החברים</h1>
-                  <p className="text-sm text-green-600">המקום לזכות בגדול! 💰</p>
+                  <h1 className="text-2xl font-bold text-green-800">טוטו שלוש</h1>
+                  <p className="text-sm text-green-600">אל תהיה עגל 💰</p>
                 </div>
               </div>
               
@@ -196,13 +198,19 @@ export default function Home() {
         </main>
 
         {/* כותרת תחתונה */}
-        <footer className="bg-green-800 text-white py-6 mt-16">
+        <footer className="bg-gradient-to-r from-green-800 to-green-900 text-white py-8 mt-16">
           <div className="max-w-6xl mx-auto px-4 text-center">
-            <p className="text-green-200 text-lg">
-              "מי שלא מנחש הרבה, יצאת עגל!" 🐄
+            <p className="text-green-400 text-sm mt-3">
+              טוטו שלוש! כל הזכויות שמורות © {new Date().getFullYear()}
             </p>
-            <p className="text-green-300 text-sm mt-2">
-              טוטו החברים - המקום לזכות בגדול! 💰
+            <div className="flex justify-center gap-4 mt-4 text-2xl">
+              <span>⚽</span>
+              <span>🏆</span>
+              <span>💰</span>
+              <span>🎯</span>
+            </div>
+            <p className="text-green-400 text-sm mt-3">
+              טוטו שלוש! כל הזכויות שמורות © {new Date().getFullYear()}
             </p>
           </div>
         </footer>

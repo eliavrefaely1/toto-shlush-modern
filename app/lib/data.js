@@ -3,6 +3,12 @@ class DataManager {
   constructor() {
     this.storageKey = 'toto-shlush-data';
     this.data = this.loadData();
+    this.normalizeData();
+  }
+
+  generateId() {
+    const rand = Math.random().toString(36).slice(2, 10);
+    return `${Date.now()}_${rand}`;
   }
 
   loadData() {
@@ -25,6 +31,49 @@ class DataManager {
     }
   }
 
+  // תיקון נתונים ישנים/חסרים
+  normalizeData() {
+    let changed = false;
+
+    // ודא שלכל משחק יש מזהה ושבוע מספרי
+    if (Array.isArray(this.data.matches)) {
+      const seen = new Set();
+      this.data.matches = this.data.matches.map((m) => {
+        const fixed = { ...m };
+        if (!fixed.id || seen.has(fixed.id)) {
+          fixed.id = this.generateId();
+          changed = true;
+        }
+        seen.add(fixed.id);
+        if (fixed.week != null && typeof fixed.week !== 'number') {
+          const n = parseInt(fixed.week, 10);
+          if (!Number.isNaN(n)) {
+            fixed.week = n;
+            changed = true;
+          }
+        }
+        if (typeof fixed.time === 'string') {
+          const s = fixed.time.trim();
+          if (s && !s.includes(':')) {
+            const digits = s.replace(/\D/g, '');
+            if (digits.length === 4) {
+              fixed.time = `${digits.slice(0,2)}:${digits.slice(2)}`;
+              changed = true;
+            } else if (digits.length === 3) {
+              fixed.time = `0${digits[0]}:${digits.slice(1)}`;
+              changed = true;
+            }
+          }
+        }
+        return fixed;
+      });
+    }
+
+    if (changed) {
+      this.saveData();
+    }
+  }
+
   getDefaultData() {
     return {
       currentWeek: 1,
@@ -39,17 +88,22 @@ class DataManager {
 
   // ניהול משחקים
   getMatches(week = null) {
-    const targetWeek = week || this.data.currentWeek;
-    return this.data.matches.filter(match => match.week === targetWeek);
+    const targetWeek = (week ?? this.data.currentWeek);
+    const targetNum = Number(targetWeek);
+    const matches = this.data.matches.filter(match => Number(match.week) === targetNum);
+    console.log(`Fetching matches for week: ${targetNum}`);
+    console.log('Matches:', matches);
+    return matches;
   }
 
   addMatch(match) {
     const newMatch = {
-      id: Date.now().toString(),
+      id: match.id || this.generateId(),
       week: match.week || this.data.currentWeek,
       homeTeam: match.homeTeam,
       awayTeam: match.awayTeam,
-      date: match.date || new Date().toISOString(),
+      // אל תקבע ברירת מחדל של היום — אם אין תאריך בקלט, השאר ריק
+      date: match.date || '',
       result: match.result || '',
       category: 'טוטו 16',
       ...match
@@ -75,12 +129,16 @@ class DataManager {
   }
 
   clearAllMatches(week = null) {
-    if (week) {
-      this.data.matches = this.data.matches.filter(m => m.week !== week);
+    if (week !== null && week !== undefined) {
+      const w = Number(week);
+      console.log(`Clearing matches for week: ${w}`);
+      this.data.matches = this.data.matches.filter(m => Number(m.week) !== w);
     } else {
+      console.log('Clearing all matches');
       this.data.matches = [];
     }
     this.saveData();
+    console.log('Matches after clearing:', this.data.matches);
   }
 
   // ניהול משתמשים
@@ -108,8 +166,9 @@ class DataManager {
 
   // ניהול ניחושים
   getUserGuesses(week = null) {
-    const targetWeek = week || this.data.currentWeek;
-    return this.data.userGuesses.filter(guess => guess.week === targetWeek);
+    const targetWeek = (week ?? this.data.currentWeek);
+    const w = Number(targetWeek);
+    return this.data.userGuesses.filter(guess => Number(guess.week) === w);
   }
 
   addUserGuess(guess) {
@@ -145,9 +204,41 @@ class DataManager {
     return null;
   }
 
+  // מחיקת ניחושים
+  deleteUserGuess(guessId) {
+    const before = this.data.userGuesses.length;
+    this.data.userGuesses = this.data.userGuesses.filter(g => g.id !== guessId);
+    const after = this.data.userGuesses.length;
+    if (after !== before) this.saveData();
+    return before - after;
+  }
+
+  deleteUserGuessesByUserAndWeek(userId, week = null) {
+    const targetWeek = (week ?? this.data.currentWeek);
+    const w = Number(targetWeek);
+    const before = this.data.userGuesses.length;
+    this.data.userGuesses = this.data.userGuesses.filter(g => !(g.userId === userId && Number(g.week) === w));
+    const after = this.data.userGuesses.length;
+    if (after !== before) this.saveData();
+    return before - after;
+  }
+
+  clearAllGuesses(week = null) {
+    const before = this.data.userGuesses.length;
+    if (week !== null && week !== undefined) {
+      const w = Number(week);
+      this.data.userGuesses = this.data.userGuesses.filter(g => Number(g.week) !== w);
+    } else {
+      this.data.userGuesses = [];
+    }
+    const after = this.data.userGuesses.length;
+    if (after !== before) this.saveData();
+    return before - after;
+  }
+
   // חישוב ניקוד
   calculateScores(week = null) {
-    const targetWeek = week || this.data.currentWeek;
+    const targetWeek = (week ?? this.data.currentWeek);
     const matches = this.getMatches(targetWeek);
     const guesses = this.getUserGuesses(targetWeek);
 
@@ -169,7 +260,7 @@ class DataManager {
 
   // ניהול קופה
   getPot(week = null) {
-    const targetWeek = week || this.data.currentWeek;
+    const targetWeek = (week ?? this.data.currentWeek);
     const guesses = this.getUserGuesses(targetWeek);
     const numOfPlayers = guesses.length;
     const amountPerPlayer = this.data.entryFee;
@@ -209,21 +300,41 @@ class DataManager {
     const targetWeek = week || this.data.currentWeek;
     const existingMatches = this.getMatches(targetWeek);
 
-    if (existingMatches.length >= 16) return existingMatches;
+    console.log('Existing matches:', existingMatches);
+
+    if (existingMatches.length >= 16) {
+      console.log('Updating existing matches with proper names if needed.');
+      existingMatches.forEach((match, index) => {
+        if (!match.name) {
+          match.name = `Match ${index + 1}`;
+          match.homeTeam = match.homeTeam || `Home Team ${index + 1}`;
+          match.awayTeam = match.awayTeam || `Away Team ${index + 1}`;
+          this.updateMatch(match.id, match);
+        }
+      });
+      const updatedMatches = this.getMatches(targetWeek);
+      console.log('Updated matches:', updatedMatches);
+      return updatedMatches;
+    }
 
     const newMatches = [];
     for (let i = existingMatches.length + 1; i <= 16; i++) {
-      newMatches.push({
+      const match = {
         week: targetWeek,
-        homeTeam: `קבוצת בית ${i}`,
-        awayTeam: `קבוצת חוץ ${i}`,
+        name: `Match ${i}`,
+        homeTeam: `Home Team ${i}`,
+        awayTeam: `Away Team ${i}`,
         result: '',
         category: 'טוטו 16'
-      });
+      };
+      console.log('Creating match:', match);
+      newMatches.push(match);
     }
 
     newMatches.forEach(match => this.addMatch(match));
-    return this.getMatches(targetWeek);
+    const updatedMatches = this.getMatches(targetWeek);
+    console.log('Updated matches:', updatedMatches);
+    return updatedMatches;
   }
 
   // קבלת דירוג
