@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Shield, Settings, Users, Trophy, Plus, Save, Eye, EyeOff, ArrowLeft, Edit, Trash2, CheckCircle } from 'lucide-react';
+import { Shield, Settings, Users, Trophy, Plus, Save, Eye, EyeOff, ArrowLeft, Edit, Trash2, CheckCircle, RefreshCw } from 'lucide-react';
 import dataManager from '../lib/data.js';
 
 // DataManager loaded successfully
@@ -29,6 +29,11 @@ export default function AdminPage() {
       })();
     }
   }, [isAuthenticated]);
+
+  const refreshAll = async () => {
+    await dataManager.syncFromServer();
+    loadAdminData();
+  }
 
   const deleteMatch = (matchId) => {
     if (confirm('האם אתה בטוח שברצונך למחוק את המשחק?')) {
@@ -291,9 +296,12 @@ export default function AdminPage() {
           </div>
           <p className="text-lg text-blue-600">ניהול משחקים, תוצאות ומשתתפים</p>
         </div>
-        <div className="mb-6">
+        <div className="mb-6 flex items-center gap-2 flex-wrap">
           <button onClick={() => router.push('/')} className="btn btn-secondary flex items-center gap-2">
             <ArrowLeft className="w-4 h-4" /> חזרה לדף הבית
+          </button>
+          <button onClick={refreshAll} className="btn btn-secondary flex items-center gap-2">
+            <RefreshCw className="w-4 h-4" /> רענן נתונים
           </button>
         </div>
         <div className="card mb-6">

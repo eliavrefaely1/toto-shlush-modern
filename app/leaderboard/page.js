@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Trophy, Medal, Star, Target, ArrowLeft, Crown, Award } from 'lucide-react'
+import { Trophy, Medal, Star, Target, ArrowLeft, Crown, Award, RefreshCw } from 'lucide-react'
 import dataManager from '../lib/data.js'
 
 export default function LeaderboardPage() {
@@ -12,10 +12,14 @@ export default function LeaderboardPage() {
   const [availableWeeks, setAvailableWeeks] = useState([1])
 
   useEffect(() => {
-    (async () => {
+    const init = async () => {
       await dataManager.syncFromServer()
       loadData()
-    })()
+    }
+    init()
+    const onVis = () => { if (document.visibilityState === 'visible') init() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
   }, [selectedWeek])
 
   const loadData = () => {
@@ -61,6 +65,11 @@ export default function LeaderboardPage() {
     return "🐄"
   }
 
+  const refreshNow = async () => {
+    await dataManager.syncFromServer();
+    loadData();
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100" dir="rtl">
       <div className="relative z-10">
@@ -84,6 +93,10 @@ export default function LeaderboardPage() {
                 <option key={week} value={week}>שבוע {week}</option>
               ))}
             </select>
+            <button onClick={refreshNow} className="btn btn-secondary flex items-center gap-2">
+              <RefreshCw className="w-4 h-4" />
+              רענן
+            </button>
           </div>
 
           {/* קופה */}

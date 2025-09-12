@@ -26,12 +26,8 @@ class DataManager {
     if (typeof window === 'undefined') return;
     try {
       localStorage.setItem(this.storageKey, JSON.stringify(this.data));
-      // סנכרון לשרת (לא חוסם)
-      fetch('/api/data', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(this.data)
-      }).catch(() => {})
+      // סנכרון לשרת עם מיזוג כדי למנוע דריסה של נתונים ממכשיר אחר
+      this.mergeAndSave().catch(() => {});
     } catch (error) {
       console.error('Error saving data:', error);
     }
@@ -107,6 +103,70 @@ class DataManager {
     } catch (e) {
       // אם אין שרת, נתעלם ונמשיך עם localStorage
     }
+  }
+
+  // מיזוג נתונים מקומי עם נתוני השרת ושמירה ל‑KV
+  async mergeAndSave() {
+    try {
+      const res = await fetch('/api/data', { cache: 'no-store' })
+      const serverData = res.ok ? await res.json() : null
+
+      const merged = this._mergeData(serverData || this.getDefaultData(), this.data)
+      await fetch('/api/data', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(merged)
+      })
+    } catch (_) {
+      // offline/אין KV — יתעדכן בפעם הבאה
+    }
+  }
+
+  _mergeData(server, local) {
+    const merged = { ...server }
+
+    // הגדרות — עדיפות לשרת אם קיימות
+    merged.currentWeek = local.currentWeek || server.currentWeek
+    merged.adminPassword = server.adminPassword || local.adminPassword || '1234'
+    merged.entryFee = local.entryFee ?? server.entryFee ?? 35
+
+    // משחקים — לא נדרוס מהטלפון. אם אין בשרת בכלל, נקח מקומי.
+    merged.matches = Array.isArray(server.matches) && server.matches.length > 0
+      ? server.matches
+      : (local.matches || [])
+
+    // משתמשים — מאחדים לפי phone (מפתח יציב יותר מ‑id)
+    const byPhone = new Map()
+    ;[...(server.users || []), ...(local.users || [])].forEach(u => {
+      if (!u) return
+      const key = (u.phone || '').trim()
+      const exist = byPhone.get(key)
+      if (!exist) byPhone.set(key, u)
+    })
+    merged.users = Array.from(byPhone.values())
+
+    // ניחושים — איחוד לפי (phone, week)
+    const gKey = g => `${(g.phone||'').trim()}__${g.week}`
+    const guessesMap = new Map()
+    ;[...(server.userGuesses || []), ...(local.userGuesses || [])].forEach(g => {
+      if (!g) return
+      const key = gKey(g)
+      // העדפה לחדש יותר לפי createdAt (אם יש)
+      const prev = guessesMap.get(key)
+      if (!prev) {
+        guessesMap.set(key, g)
+      } else {
+        const t1 = new Date(prev.createdAt || 0).getTime()
+        const t2 = new Date(g.createdAt || 0).getTime()
+        if (t2 > t1) guessesMap.set(key, g)
+      }
+    })
+    merged.userGuesses = Array.from(guessesMap.values())
+
+    // pots לא נשמר כרשימה — מחשבים דינמית; נשמר אם קיים
+    merged.pots = server.pots || local.pots || []
+
+    return merged
   }
 
   // ניהול משחקים

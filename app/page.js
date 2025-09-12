@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Trophy, Users, Settings, Star, Target, Gift } from 'lucide-react'
+import { Trophy, Users, Settings, Star, Target, Gift, RefreshCw } from 'lucide-react'
 import dataManager from './lib/data.js'
 
 export default function Home() {
@@ -11,12 +11,14 @@ export default function Home() {
   const [motivationalQuote, setMotivationalQuote] = useState('')
 
   useEffect(() => {
-    // טעינת נתונים
-    const currentPot = dataManager.getPot()
-    const currentLeaderboard = dataManager.getLeaderboard()
-    
-    setPot(currentPot)
-    setLeaderboard(currentLeaderboard)
+    const init = async () => {
+      await dataManager.syncFromServer()
+      const currentPot = dataManager.getPot()
+      const currentLeaderboard = dataManager.getLeaderboard()
+      setPot(currentPot)
+      setLeaderboard(currentLeaderboard)
+    }
+    init()
 
     // משפט מוטיבציה לפי האיפיון
     const quotes = [
@@ -33,6 +35,10 @@ export default function Home() {
     ]
     
     setMotivationalQuote(quotes[Math.floor(Math.random() * quotes.length)])
+
+    const onVis = () => { if (document.visibilityState === 'visible') init() }
+    document.addEventListener('visibilitychange', onVis)
+    return () => document.removeEventListener('visibilitychange', onVis)
   }, [])
 
   const getScoreMessage = (score) => {
@@ -41,6 +47,12 @@ export default function Home() {
     if (score >= 8) return "לא רע בכלל! עוד קצת ואתה שם! 💪"
     if (score >= 4) return "יש לך פוטנציאל! תמשיך לנסות! 🎯"
     return "יצאת עגל – 3 ניחושים השבוע? 🐄"
+  }
+
+  const refreshData = async () => {
+    await dataManager.syncFromServer()
+    setPot(dataManager.getPot())
+    setLeaderboard(dataManager.getLeaderboard())
   }
 
   return (
@@ -68,6 +80,10 @@ export default function Home() {
                   <Settings className="w-4 h-4" />
                   מנהל
                 </Link>
+                <button onClick={refreshData} className="btn btn-secondary flex items-center gap-2">
+                  <RefreshCw className="w-4 h-4" />
+                  רענן
+                </button>
               </nav>
             </div>
           </div>

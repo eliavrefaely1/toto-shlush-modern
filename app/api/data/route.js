@@ -31,8 +31,23 @@ export const POST = async () => {
   return new NextResponse(JSON.stringify({ result }), { status: 200 });
 };
 
-export async function GET() {
+export async function GET(request) {
   try {
+    const { searchParams } = new URL(request.url)
+    if (searchParams.get('diag') === '1') {
+      // החזר סטטוס משתני סביבה כדי לאבחן
+      return Response.json({
+        ok: true,
+        runtime,
+        env: {
+          KV_URL: !!process.env.KV_URL,
+          KV_REST_API_URL: !!process.env.KV_REST_API_URL,
+          KV_REST_API_TOKEN: !!process.env.KV_REST_API_TOKEN,
+          KV_REST_API_READ_ONLY_TOKEN: !!process.env.KV_REST_API_READ_ONLY_TOKEN,
+        }
+      }, { headers: { 'Cache-Control': 'no-store' } })
+    }
+
     const data = await kv.get(KEY)
     return Response.json(data || defaultData, {
       headers: { 'Cache-Control': 'no-store' }

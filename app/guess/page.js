@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Target, Save, ArrowRight, ArrowLeft, CheckCircle } from 'lucide-react'
+import { Target, Save, ArrowRight, ArrowLeft, CheckCircle, RefreshCw } from 'lucide-react'
 import dataManager from '../lib/data.js'
 
 export default function GuessPage() {
@@ -131,10 +131,19 @@ export default function GuessPage() {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100" dir="rtl">
       <div className="relative z-10">
       <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="mb-4">
+        <div className="mb-4 flex items-center gap-2 flex-wrap">
           <button onClick={() => router.push('/')} className="btn btn-secondary flex items-center gap-2">
             <ArrowLeft className="w-4 h-4" />
             חזרה לדף הבית
+          </button>
+          <button
+            onClick={async () => {
+              await dataManager.syncFromServer();
+              setMatches(dataManager.getMatches());
+            }}
+            className="btn btn-secondary flex items-center gap-2"
+          >
+            <RefreshCw className="w-4 h-4" /> רענן נתונים
           </button>
         </div>
         {/* כותרת */}
