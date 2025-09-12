@@ -44,27 +44,19 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen relative overflow-x-hidden" dir="rtl">
-      {/* רקע עם אלמנטים צפים */}
-      <div className="football-bg absolute inset-0" />
-      <div className="money-floating" style={{top: '10%', left: '5%', animationDelay: '0s'}}>💰</div>
-      <div className="money-floating" style={{top: '20%', right: '10%', animationDelay: '2s'}}>💵</div>
-      <div className="money-floating" style={{top: '60%', left: '15%', animationDelay: '4s'}}>💷</div>
-      <div className="money-floating" style={{top: '40%', right: '5%', animationDelay: '1s'}}>💶</div>
-      <div className="money-floating" style={{top: '80%', left: '25%', animationDelay: '3s'}}>⚽</div>
-
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100" dir="rtl">
       <div className="relative z-10">
         {/* כותרת עליונה */}
-        <header className="bg-white/90 backdrop-blur-md border-b border-green-200 shadow-lg">
+        <header className="bg-white/80 backdrop-blur border-b border-gray-200 shadow-sm">
           <div className="max-w-6xl mx-auto px-4 py-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-green-600 rounded-full flex items-center justify-center">
+                <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
                   <Trophy className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold text-green-800">טוטו שלוש</h1>
-                  <p className="text-sm text-green-600">אל תהיה עגל 💰</p>
+                  <h1 className="text-2xl font-bold text-blue-800">טוטו שלוש</h1>
+                  <p className="text-sm text-gray-600">המקום לזכות בגדול</p>
                 </div>
               </div>
               
@@ -83,9 +75,9 @@ export default function Home() {
 
         <main className="max-w-6xl mx-auto px-4 py-8">
           {/* משפט מוטיבציה */}
-          <div className="bg-gradient-to-r from-yellow-400 to-orange-500 p-6 rounded-2xl shadow-xl mb-8 text-center">
-            <div className="text-4xl mb-3">🎪</div>
-            <p className="text-white font-bold text-xl animate-pulse">
+          <div className="bg-blue-50 border border-blue-100 p-6 rounded-2xl shadow mb-8 text-center">
+            <div className="text-4xl mb-3">🎯</div>
+            <p className="text-blue-900 font-bold text-xl">
               {motivationalQuote}
             </p>
           </div>
@@ -93,28 +85,20 @@ export default function Home() {
           {/* קופה שבועית */}
           <div className="card mb-8">
             <div className="card-header">
-              <h2 className="text-2xl font-bold text-center text-green-800 flex items-center justify-center gap-3">
+              <h2 className="text-2xl font-bold text-center text-blue-800 flex items-center justify-center gap-3">
                 <Gift className="w-8 h-8" />
                 הקופה השבועית
               </h2>
             </div>
             <div className="card-content">
-              <div className="bg-gradient-to-br from-yellow-400 via-yellow-500 to-orange-500 rounded-2xl p-6 text-center text-white">
-                <div className="text-6xl font-bold mb-2">
+              <div className="bg-blue-50 border border-blue-100 rounded-2xl p-6 text-center text-blue-900">
+                <div className="text-5xl font-bold mb-2">
                   ₪{pot.totalAmount.toLocaleString()}
                 </div>
-                <p className="text-xl opacity-90">
+                <p className="text-lg">
                   {pot.numOfPlayers} משתתפים × ₪{pot.amountPerPlayer}
                 </p>
-                <div className="flex justify-center gap-3 mt-4">
-                  <span className="text-3xl">💰</span>
-                  <span className="text-3xl">💵</span>
-                  <span className="text-3xl">💷</span>
-                  <span className="text-3xl">💶</span>
-                </div>
-                <p className="mt-4 text-lg font-semibold">
-                  הזוכה לוקח הכל! 🎯
-                </p>
+                <p className="mt-4 text-sm text-blue-700">הזוכה לוקח הכל</p>
               </div>
             </div>
           </div>
@@ -124,8 +108,8 @@ export default function Home() {
             <Link href="/guess" className="group">
               <div className="card hover:shadow-xl transition-all duration-300 group-hover:scale-105">
                 <div className="card-content text-center">
-                  <Target className="w-16 h-16 text-green-500 mx-auto mb-4" />
-                  <h3 className="text-2xl font-bold text-green-800 mb-2">מלא טופס</h3>
+                  <Target className="w-16 h-16 text-blue-500 mx-auto mb-4" />
+                  <h3 className="text-2xl font-bold text-blue-800 mb-2">מלא טופס</h3>
                   <p className="text-gray-600 mb-4">הזן את הניחושים שלך ל-16 המשחקים</p>
                   <div className="btn btn-primary w-full text-lg py-3">
                     התחל לנחש! 🎯
@@ -137,8 +121,8 @@ export default function Home() {
             <Link href="/leaderboard" className="group">
               <div className="card hover:shadow-xl transition-all duration-300 group-hover:scale-105">
                 <div className="card-content text-center">
-                  <Star className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
-                  <h3 className="text-2xl font-bold text-green-800 mb-2">טבלת דירוג</h3>
+                  <Star className="w-16 h-16 text-blue-500 mx-auto mb-4" />
+                  <h3 className="text-2xl font-bold text-blue-800 mb-2">טבלת דירוג</h3>
                   <p className="text-gray-600 mb-4">ראה מי מוביל בתחרות</p>
                   <div className="btn btn-secondary w-full text-lg py-3">
                     צפה בדירוג! 🏆
@@ -152,7 +136,7 @@ export default function Home() {
           {leaderboard.length > 0 && (
             <div className="card">
               <div className="card-header">
-                <h3 className="text-xl font-bold text-green-800 flex items-center gap-2">
+                <h3 className="text-xl font-bold text-blue-800 flex items-center gap-2">
                   <Users className="w-6 h-6" />
                   דירוג מהיר
                 </h3>
@@ -163,10 +147,10 @@ export default function Home() {
                     <div key={entry.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                       <div className="flex items-center gap-3">
                         <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white ${
-                          index === 0 ? 'bg-yellow-500' :
-                          index === 1 ? 'bg-gray-400' :
-                          index === 2 ? 'bg-orange-500' :
-                          'bg-gray-300'
+                          index === 0 ? 'bg-blue-600' :
+                          index === 1 ? 'bg-blue-500' :
+                          index === 2 ? 'bg-blue-400' :
+                          'bg-blue-300'
                         }`}>
                           {index + 1}
                         </div>
@@ -176,7 +160,7 @@ export default function Home() {
                         </div>
                       </div>
                       <div className="text-right">
-                        <div className="text-2xl font-bold text-green-600">{entry.score}</div>
+                        <div className="text-2xl font-bold text-blue-600">{entry.score}</div>
                         <div className="text-sm text-gray-500">נקודות</div>
                         <div className="text-xs text-gray-400 mt-1">
                           {getScoreMessage(entry.score)}
@@ -198,20 +182,16 @@ export default function Home() {
         </main>
 
         {/* כותרת תחתונה */}
-        <footer className="bg-gradient-to-r from-green-800 to-green-900 text-white py-8 mt-16">
+        <footer className="bg-gradient-to-r from-blue-800 to-blue-900 text-white py-8 mt-16">
           <div className="max-w-6xl mx-auto px-4 text-center">
-            <p className="text-green-400 text-sm mt-3">
-              טוטו שלוש! כל הזכויות שמורות © {new Date().getFullYear()}
-            </p>
+            <p className="text-blue-200 text-sm mt-3">טוטו שלוש! כל הזכויות שמורות © {new Date().getFullYear()}</p>
             <div className="flex justify-center gap-4 mt-4 text-2xl">
               <span>⚽</span>
               <span>🏆</span>
               <span>💰</span>
               <span>🎯</span>
             </div>
-            <p className="text-green-400 text-sm mt-3">
-              טוטו שלוש! כל הזכויות שמורות © {new Date().getFullYear()}
-            </p>
+            <p className="text-blue-200 text-sm mt-3">תיהנו ובהצלחה!</p>
           </div>
         </footer>
       </div>

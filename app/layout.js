@@ -11,7 +11,7 @@ export default function RootLayout({ children }) {
       <head>
         <link rel="stylesheet" href="/styles/globals.css" />
       </head>
-      <body className="min-h-screen bg-gradient-to-br from-green-50 via-white to-green-100">
+      <body className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
         {children}
       </body>
     </html>

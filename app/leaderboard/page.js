@@ -59,22 +59,14 @@ export default function LeaderboardPage() {
   }
 
   return (
-    <div className="min-h-screen relative overflow-x-hidden" dir="rtl">
-      {/* רקע עם אלמנטים צפים */}
-      <div className="football-bg absolute inset-0" />
-      <div className="money-floating" style={{top: '10%', left: '5%', animationDelay: '0s'}}>💰</div>
-      <div className="money-floating" style={{top: '20%', right: '10%', animationDelay: '2s'}}>💵</div>
-      <div className="money-floating" style={{top: '60%', left: '15%', animationDelay: '4s'}}>💷</div>
-      <div className="money-floating" style={{top: '40%', right: '5%', animationDelay: '1s'}}>💶</div>
-      <div className="money-floating" style={{top: '80%', left: '25%', animationDelay: '3s'}}>⚽</div>
-      
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100" dir="rtl">
       <div className="relative z-10">
       <div className="max-w-6xl mx-auto px-4 py-8">
         {/* כותרת */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <Trophy className="w-8 h-8 text-green-600" />
-            <h1 className="text-3xl font-bold text-green-800">טבלת דירוג</h1>
+            <Trophy className="w-8 h-8 text-blue-600" />
+            <h1 className="text-3xl font-bold text-blue-800">טבלת דירוג</h1>
           </div>
           
           {/* בחירת שבוע */}
@@ -94,19 +86,9 @@ export default function LeaderboardPage() {
           {/* קופה */}
           <div className="card mb-8">
             <div className="card-content">
-              <div className="bg-gradient-to-br from-yellow-400 via-yellow-500 to-orange-500 rounded-2xl p-6 text-center text-white">
-                <div className="text-5xl font-bold mb-2">
-                  ₪{pot.totalAmount.toLocaleString()}
-                </div>
-                <p className="text-xl opacity-90">
-                  {pot.numOfPlayers} משתתפים × ₪{pot.amountPerPlayer}
-                </p>
-                <div className="flex justify-center gap-3 mt-4">
-                  <span className="text-3xl">💰</span>
-                  <span className="text-3xl">💵</span>
-                  <span className="text-3xl">��</span>
-                  <span className="text-3xl">💶</span>
-                </div>
+              <div className="bg-blue-50 border border-blue-100 rounded-2xl p-6 text-center text-blue-900">
+                <div className="text-5xl font-bold mb-2">₪{pot.totalAmount.toLocaleString()}</div>
+                <p className="text-lg">{pot.numOfPlayers} משתתפים × ₪{pot.amountPerPlayer}</p>
               </div>
             </div>
           </div>
@@ -129,9 +111,7 @@ export default function LeaderboardPage() {
             {leaderboard.map((entry, index) => (
               <div
                 key={entry.id}
-                className={`card transition-all duration-300 hover:shadow-xl ${
-                  index < 3 ? 'ring-2 ring-yellow-400' : ''
-                }`}
+                className={`card transition-all duration-300 hover:shadow-xl ${index < 3 ? 'ring-2 ring-blue-300' : ''}`}
               >
                 <div className="card-content">
                   <div className="flex items-center justify-between">
@@ -159,7 +139,7 @@ export default function LeaderboardPage() {
                       <div className="flex items-center gap-2 mb-2">
                         <span className="text-4xl">{getScoreEmoji(entry.score)}</span>
                         <div>
-                          <div className="text-3xl font-bold text-green-600">
+                          <div className="text-3xl font-bold text-blue-600">
                             {entry.score}
                           </div>
                           <div className="text-sm text-gray-500">נקודות</div>
@@ -180,7 +160,7 @@ export default function LeaderboardPage() {
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-3">
                       <div
-                        className="bg-gradient-to-r from-green-400 to-green-500 h-3 rounded-full transition-all duration-500"
+                        className="bg-gradient-to-r from-blue-400 to-blue-500 h-3 rounded-full transition-all duration-500"
                         style={{ width: `${(entry.score / 16) * 100}%` }}
                       ></div>
                     </div>

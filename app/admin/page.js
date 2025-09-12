@@ -218,7 +218,12 @@ export default function AdminPage() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-50 via-white to-gray-100">
+      <div className="min-h-screen relative flex items-center justify-center bg-gradient-to-br from-gray-50 via-white to-gray-100">
+        <div className="absolute top-4 right-4">
+          <button onClick={() => router.push('/')} className="btn btn-secondary flex items-center gap-2">
+            <ArrowLeft className="w-4 h-4" /> חזרה לדף הבית
+          </button>
+        </div>
         <div className="card max-w-md mx-auto">
           <div className="card-content">
             <div className="text-center mb-6">
