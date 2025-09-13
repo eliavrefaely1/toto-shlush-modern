@@ -52,8 +52,7 @@ export default function AdminPage() {
 
   const clearAllMatches = async () => {
     if (confirm('האם אתה בטוח שברצונך למחוק את כל המשחקים?')) {
-      console.log('Clearing all matches for week:', settings.currentWeek);
-      console.log('Matches before clearing:', matches.length);
+      // suppressed console output
       
       // Clear all matches for current week
       dataManager.clearAllMatches(settings.currentWeek);
@@ -88,7 +87,7 @@ export default function AdminPage() {
       setLeaderboard(currentLeaderboard);
       setPot(currentPot);
     } catch (error) {
-      console.error('Error loading admin data:', error);
+      // suppressed console output
     }
     setIsLoading(false);
   };
@@ -173,7 +172,7 @@ export default function AdminPage() {
       setMatches(dataManager.getMatches(settings.currentWeek));
       alert(`נתונים נטענו בהצלחה! ${newMatches.length} משחקים נוצרו.`);
     } catch (error) {
-      console.error('Error parsing JSON:', error);
+      // suppressed console output
       alert('שגיאה בטעינת הנתונים. אנא ודא שהקובץ בפורמט JSON תקין.');
     }
   };

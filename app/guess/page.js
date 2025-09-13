@@ -97,7 +97,7 @@ export default function GuessPage() {
       }, 3000)
 
     } catch (error) {
-      console.error('Error submitting guess:', error)
+      // suppressed console output
       alert('שגיאה בשמירת הניחושים. אנא נסה שוב.')
     } finally {
       setIsSubmitting(false)

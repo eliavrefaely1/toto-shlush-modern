@@ -28,7 +28,7 @@ class DataManager {
       const stored = localStorage.getItem(this.storageKey);
       return stored ? JSON.parse(stored) : this.getDefaultData();
     } catch (error) {
-      console.error('Error loading data:', error);
+      // suppressed console output
       return this.getDefaultData();
     }
   }
@@ -42,7 +42,7 @@ class DataManager {
         router.refresh();
       }
     } catch (error) {
-      console.error('Error saving data:', error);
+      // suppressed console output
     }
   }
 
@@ -106,18 +106,21 @@ class DataManager {
 
   // סנכרון מהשרת (KV) ללקוח
   async syncFromServer() {
+    // מושך מהשרת, מאחד מול מקומי, ושומר מקומי; לא מוחק נתונים אם השרת ריק
     try {
       const res = await fetch('/api/data', { cache: 'no-store' })
-      if (!res.ok) return;
+      if (!res.ok) return
       const serverData = await res.json()
       if (serverData && typeof serverData === 'object') {
-        this.data = { ...this.getDefaultData(), ...serverData }
+        // מיזוג דו-כיווני: שרת מול מקומי
+        const merged = this._mergeData(serverData || this.getDefaultData(), this.data || this.getDefaultData())
+        this.data = merged
         if (typeof window !== 'undefined') {
           localStorage.setItem(this.storageKey, JSON.stringify(this.data))
         }
       }
-    } catch (e) {
-      // אם אין שרת, נתעלם ונמשיך עם localStorage
+    } catch (_) {
+      // offline/אין API — השאר את הנתונים המקומיים
     }
   }
 
@@ -126,8 +129,11 @@ class DataManager {
     try {
       const res = await fetch('/api/data', { cache: 'no-store' })
       const serverData = res.ok ? await res.json() : null
-
       const merged = this._mergeData(serverData || this.getDefaultData(), this.data)
+      // שמור מקומית לפני ניסיון שרת
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(this.storageKey, JSON.stringify(merged))
+      }
       await fetch('/api/data', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -216,8 +222,6 @@ class DataManager {
     const targetWeek = (week ?? this.data.currentWeek);
     const targetNum = Number(targetWeek);
     const matches = this.data.matches.filter(match => Number(match.week) === targetNum);
-    console.log(`Fetching matches for week: ${targetNum}`);
-    console.log('Matches:', matches);
     return matches;
   }
 
@@ -256,11 +260,9 @@ class DataManager {
   clearAllMatches(week = null) {
     if (week !== null && week !== undefined) {
       const w = Number(week);
-      console.log(`Clearing matches for week: ${w}`);
       this.data.matches = this.data.matches.filter(m => Number(m.week) !== w);
       if (!this.data.deletedWeeks.includes(w)) this.data.deletedWeeks.push(w);
     } else {
-      console.log('Clearing all matches');
       this.data.matches = [];
       const weeks = new Set([
         ...this.data.userGuesses.map(g => Number(g.week)),
@@ -269,7 +271,6 @@ class DataManager {
       this.data.deletedWeeks = Array.from(weeks);
     }
     this.saveData();
-    console.log('Matches after clearing:', this.data.matches);
   }
 
   // ניהול משתמשים
@@ -421,7 +422,6 @@ class DataManager {
       matches.forEach((match, index) => {
         const isCorrect = match.result && guess.guesses[index] === match.result;
         if (!match.result) {
-          console.log(`Match ${index + 1}: No result available, marking as incorrect.`);
           correctGuesses.push(false);
         } else {
           correctGuesses.push(isCorrect);
@@ -491,10 +491,7 @@ class DataManager {
     const targetWeek = week || this.data.currentWeek;
     const existingMatches = this.getMatches(targetWeek);
 
-    console.log('Existing matches:', existingMatches);
-
     if (existingMatches.length >= 16) {
-      console.log('Updating existing matches with proper names if needed.');
       existingMatches.forEach((match, index) => {
         if (!match.name) {
           match.name = `Match ${index + 1}`;
@@ -504,7 +501,6 @@ class DataManager {
         }
       });
       const updatedMatches = this.getMatches(targetWeek);
-      console.log('Updated matches:', updatedMatches);
       return updatedMatches;
     }
 
@@ -518,13 +514,11 @@ class DataManager {
         result: '',
         category: 'טוטו 16'
       };
-      console.log('Creating match:', match);
       newMatches.push(match);
     }
 
     newMatches.forEach(match => this.addMatch(match));
     const updatedMatches = this.getMatches(targetWeek);
-    console.log('Updated matches:', updatedMatches);
     return updatedMatches;
   }
 

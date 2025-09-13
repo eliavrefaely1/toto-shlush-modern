@@ -108,18 +108,21 @@ export default function Home() {
                         <div className="text-lg font-bold text-blue-600">{entry.score}</div>
                         <div className="text-xs text-gray-500">נקודות</div>
                       </div>
-                      <div className="mt-2">
-                        {entry.guesses.map((guess, i) => (
-                          <span
-                            key={i}
-                            className={`inline-block px-2 py-1 rounded-full text-white text-xs font-bold ${
-                              guess.correct ? 'bg-green-500' : 'bg-red-500'
-                            }`}
-                          >
-                            {guess.value}
-                          </span>
-                        ))}
-                      </div>
+                      {false && (
+                        <div className="mt-2">
+                          {/* הוסתר: הצ'יפים האדומים/ירוקים של ניחושים לכל משתמש */}
+                          {entry.guesses.map((guess, i) => (
+                            <span
+                              key={i}
+                              className={`inline-block px-2 py-1 rounded-full text-white text-xs font-bold ${
+                                guess.correct ? 'bg-green-500' : 'bg-red-500'
+                              }`}
+                            >
+                              {guess.value}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
