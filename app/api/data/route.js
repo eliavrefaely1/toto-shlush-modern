@@ -62,8 +62,16 @@ export async function GET(request) {
 
 export async function PUT(req) {
   try {
-    const data = await req.json()
-    await kv.set(KEY, data)
+    const incoming = await req.json()
+    const current = (await kv.get(KEY)) || defaultData
+
+    // אכיפת נעילת הגשות: אם הנעילה פעילה כרגע, אל נאפשר שינוי userGuesses
+    const toSave = { ...current, ...incoming }
+    if (current?.submissionsLocked) {
+      toSave.userGuesses = current.userGuesses || []
+    }
+
+    await kv.set(KEY, toSave)
     return Response.json({ ok: true }, {
       headers: { 'Cache-Control': 'no-store' }
     })

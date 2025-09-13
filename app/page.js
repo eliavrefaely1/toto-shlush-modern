@@ -1,11 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Trophy, Users, Settings, Star, Target, Gift, RefreshCw } from 'lucide-react'
 import dataManager from './lib/data.js'
 
 export default function Home() {
+  const router = useRouter()
   const [pot, setPot] = useState({ totalAmount: 0, numOfPlayers: 0 })
   const [leaderboard, setLeaderboard] = useState([])
   const [motivationalQuote, setMotivationalQuote] = useState('')
@@ -50,9 +52,18 @@ export default function Home() {
   }
 
   const refreshData = async () => {
-    await dataManager.syncFromServer()
-    setPot(dataManager.getPot())
-    setLeaderboard(dataManager.getLeaderboard())
+    try {
+      await dataManager.syncFromServer()
+      setPot(dataManager.getPot())
+      setLeaderboard(dataManager.getLeaderboard())
+    } finally {
+      // רענון מלא של העמוד כדי לוודא עדכון מוחלט
+      if (typeof window !== 'undefined') {
+        window.location.reload()
+      } else {
+        router.refresh()
+      }
+    }
   }
 
   return (
@@ -73,13 +84,6 @@ export default function Home() {
               </div>
               
               <nav className="flex gap-2">
-                <Link
-                  href="/admin"
-                  className="btn btn-secondary flex items-center gap-2"
-                >
-                  <Settings className="w-4 h-4" />
-                  מנהל
-                </Link>
                 <button onClick={refreshData} className="btn btn-secondary flex items-center gap-2">
                   <RefreshCw className="w-4 h-4" />
                   רענן

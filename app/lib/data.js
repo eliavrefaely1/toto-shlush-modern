@@ -92,6 +92,7 @@ class DataManager {
       currentWeek: 1,
       adminPassword: '1234',
       entryFee: 35,
+      submissionsLocked: false,
       matches: [],
       users: [],
       userGuesses: [],
@@ -142,6 +143,12 @@ class DataManager {
     merged.currentWeek = local.currentWeek || server.currentWeek
     merged.adminPassword = server.adminPassword || local.adminPassword || '1234'
     merged.entryFee = local.entryFee ?? server.entryFee ?? 35
+    // שמירת מצב נעילת הגשות — ערך מקומי גובר אם הוגדר
+    if (typeof local.submissionsLocked === 'boolean') {
+      merged.submissionsLocked = !!local.submissionsLocked
+    } else {
+      merged.submissionsLocked = !!server.submissionsLocked
+    }
 
     // משחקים — מאחדים לפי שבוע, ומכבדים מחיקות מקומיות (deletedWeeks)
     const srvMatches = Array.isArray(server.matches) ? server.matches : []
@@ -442,14 +449,24 @@ class DataManager {
     return {
       currentWeek: this.data.currentWeek,
       adminPassword: this.data.adminPassword,
-      entryFee: this.data.entryFee
+      entryFee: this.data.entryFee,
+      submissionsLocked: !!this.data.submissionsLocked
     };
   }
 
   updateSettings(settings) {
-    this.data.currentWeek = settings.currentWeek || this.data.currentWeek;
-    this.data.adminPassword = settings.adminPassword || this.data.adminPassword;
-    this.data.entryFee = settings.entryFee || this.data.entryFee;
+    if (Object.prototype.hasOwnProperty.call(settings, 'currentWeek')) {
+      this.data.currentWeek = settings.currentWeek;
+    }
+    if (Object.prototype.hasOwnProperty.call(settings, 'adminPassword')) {
+      this.data.adminPassword = settings.adminPassword;
+    }
+    if (Object.prototype.hasOwnProperty.call(settings, 'entryFee')) {
+      this.data.entryFee = settings.entryFee;
+    }
+    if (Object.prototype.hasOwnProperty.call(settings, 'submissionsLocked')) {
+      this.data.submissionsLocked = !!settings.submissionsLocked;
+    }
     this.saveData();
   }
 

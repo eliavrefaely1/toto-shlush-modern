@@ -12,6 +12,7 @@ export default function GuessPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0)
   const [showSuccess, setShowSuccess] = useState(false)
+  const [isLocked, setIsLocked] = useState(false)
 
   useEffect(() => {
     // טעינת משחקים + שם מהאחסון המקומי
@@ -30,6 +31,8 @@ export default function GuessPage() {
           setFormData(prev => ({ ...prev, guesses: existing.guesses }))
         }
       }
+      const s = dataManager.getSettings()
+      setIsLocked(!!s.submissionsLocked)
     })()
   }, [])
 
@@ -51,6 +54,14 @@ export default function GuessPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    // בדיקת מצב נעילה מהשרת ברגע השליחה
+    await dataManager.syncFromServer()
+    const sNow = dataManager.getSettings()
+    if (sNow.submissionsLocked) {
+      setIsLocked(true)
+      alert('ההגשה סגורה כרגע. נסו מאוחר יותר.')
+      return
+    }
     
     if (!formData.name.trim()) {
       alert('אנא מלא את שמך המלא')
@@ -147,15 +158,6 @@ export default function GuessPage() {
           <button onClick={() => router.push('/')} className="btn btn-secondary flex items-center gap-2">
             <ArrowLeft className="w-4 h-4" />
             חזרה לדף הבית
-          </button>
-          <button
-            onClick={async () => {
-              await dataManager.syncFromServer();
-              setMatches(dataManager.getMatches());
-            }}
-            className="btn btn-secondary flex items-center gap-2"
-          >
-            <RefreshCw className="w-4 h-4" /> רענן נתונים
           </button>
         </div>
         {/* כותרת */}
@@ -302,7 +304,7 @@ export default function GuessPage() {
           <div className="text-center">
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isLocked}
               className="btn btn-primary text-xl py-4 px-8 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? (
@@ -313,12 +315,17 @@ export default function GuessPage() {
               ) : (
                 <div className="flex items-center gap-2">
                   <Save className="w-5 h-5" />
-                  שלח ניחושים
+                  {isLocked ? 'ההגשה סגורה' : 'שלח ניחושים'}
                 </div>
               )}
             </button>
           </div>
         </form>
+        {isLocked && (
+          <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded text-yellow-800 text-center">
+            ההגשה סגורה כעת על ידי המנהל. ניתן לעיין במשחקים ולערוך טיוטה, אך לא לשלוח.
+          </div>
+        )}
       </div>
       </div>
     </div>

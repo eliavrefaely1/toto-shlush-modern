@@ -31,8 +31,14 @@ export default function AdminPage() {
   }, [isAuthenticated]);
 
   const refreshAll = async () => {
-    await dataManager.syncFromServer();
-    loadAdminData();
+    try {
+      await dataManager.syncFromServer();
+      loadAdminData();
+    } finally {
+      if (typeof window !== 'undefined') {
+        window.location.reload();
+      }
+    }
   }
 
   const deleteMatch = async (matchId) => {
@@ -206,6 +212,15 @@ export default function AdminPage() {
     if (newSettings.currentWeek && newSettings.currentWeek !== settings.currentWeek) {
       loadAdminData();
     }
+  };
+
+  const toggleLockSubmissions = async () => {
+    const next = !settings.submissionsLocked;
+    dataManager.updateSettings({ submissionsLocked: next });
+    await (dataManager.mergeAndSave ? dataManager.mergeAndSave() : Promise.resolve());
+    await dataManager.syncFromServer();
+    setSettings({ ...settings, submissionsLocked: next });
+    alert(next ? 'הגשת טפסים ננעלה.' : 'הגשת טפסים נפתחה.');
   };
 
   const deleteGuessesForUserCurrentWeek = async (userIdOrName) => {
@@ -652,6 +667,16 @@ export default function AdminPage() {
                       onChange={(e) => updateSettings({ adminPassword: e.target.value })}
                       className="input"
                     />
+                  </div>
+                  
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border">
+                    <div>
+                      <div className="font-bold text-blue-800">מצב הגשת טפסים</div>
+                      <div className="text-sm text-gray-600">{settings.submissionsLocked ? 'סגור — אי אפשר לשלוח טפסים' : 'פתוח — ניתן לשלוח טפסים'}</div>
+                    </div>
+                    <button onClick={toggleLockSubmissions} className={`btn ${settings.submissionsLocked ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'btn-secondary'}`}>
+                      {settings.submissionsLocked ? 'פתח הגשה' : 'נעל הגשה'}
+                    </button>
                   </div>
                   
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
