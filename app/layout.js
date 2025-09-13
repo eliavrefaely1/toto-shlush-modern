@@ -1,4 +1,5 @@
 import './globals.css';
+import Navbar from './components/Navbar.jsx';
 
 export const metadata = {
   title: 'טוטו שלוש',
@@ -10,6 +11,7 @@ export default function RootLayout({ children }) {
     <html lang="he" dir="rtl">
       <head></head>
       <body className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
+        <Navbar />
         {children}
       </body>
     </html>

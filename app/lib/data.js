@@ -11,6 +11,17 @@ class DataManager {
     return `${Date.now()}_${rand}`;
   }
 
+  // מזהה יציב לפי שם משתמש כדי לאחד בין מכשירים
+  generateUserIdFromName(name) {
+    const s = (name || '').toLowerCase().trim();
+    let h = 0;
+    for (let i = 0; i < s.length; i++) {
+      h = ((h << 5) - h) + s.charCodeAt(i);
+      h |= 0; // 32-bit
+    }
+    return `u_${Math.abs(h).toString(36)}`;
+  }
+
   loadData() {
     if (typeof window === 'undefined') return this.getDefaultData();
     try {
@@ -85,7 +96,8 @@ class DataManager {
       users: [],
       userGuesses: [],
       pots: [],
-      deletedWeeks: []
+      deletedWeeks: [],
+      deletedGuessKeys: []
     };
   }
 
@@ -151,22 +163,24 @@ class DataManager {
     })
     merged.matches = Array.from(byWeek.values()).flat()
 
-    // משתמשים — מאחדים לפי phone (מפתח יציב יותר מ‑id)
+    // משתמשים — מאחדים לפי name (מפתח יציב יותר מ-id כעת)
     const byPhone = new Map()
     ;[...(server.users || []), ...(local.users || [])].forEach(u => {
       if (!u) return
-      const key = (u.phone || '').trim()
+      const key = (u.name || '').toLowerCase().trim()
       const exist = byPhone.get(key)
       if (!exist) byPhone.set(key, u)
     })
     merged.users = Array.from(byPhone.values())
 
-    // ניחושים — איחוד לפי (phone, week)
-    const gKey = g => `${(g.phone||'').trim()}__${g.week}`
+    // ניחושים — איחוד לפי (name, week) תוך כיבוד מחיקות
+    const gKey = g => `${(g.name||'').toLowerCase().trim()}__${g.week}`
+    const deletedGuessKeys = new Set((local.deletedGuessKeys || []).map(k => String(k).toLowerCase()))
     const guessesMap = new Map()
     ;[...(server.userGuesses || []), ...(local.userGuesses || [])].forEach(g => {
       if (!g) return
       const key = gKey(g)
+      if (deletedGuessKeys.has(key)) return
       // העדפה לחדש יותר לפי createdAt (אם יש)
       const prev = guessesMap.get(key)
       if (!prev) {
@@ -184,6 +198,7 @@ class DataManager {
 
     // איפוס דגלי מחיקה לאחר שמירה
     merged.deletedWeeks = []
+    merged.deletedGuessKeys = []
     return merged
   }
 
@@ -254,10 +269,11 @@ class DataManager {
   }
 
   addUser(user) {
+    const existing = (this.data.users || []).find(u => (u.name || '').toLowerCase().trim() === (user.name || '').toLowerCase().trim())
+    if (existing) return existing;
     const newUser = {
-      id: Date.now().toString(),
+      id: this.generateUserIdFromName(user.name),
       name: user.name,
-      phone: user.phone,
       isAdmin: user.isAdmin || false,
       createdAt: new Date().toISOString(),
       ...user
@@ -283,7 +299,6 @@ class DataManager {
       id: Date.now().toString(),
       userId: guess.userId,
       name: guess.name,
-      phone: guess.phone,
       week: guess.week || this.data.currentWeek,
       guesses: guess.guesses || Array(16).fill(''),
       score: 0,
@@ -293,7 +308,10 @@ class DataManager {
 
     // מחיקת ניחוש קודם אם קיים
     this.data.userGuesses = this.data.userGuesses.filter(
-      g => !(g.userId === newGuess.userId && g.week === newGuess.week)
+      g => !(
+        (g.userId === newGuess.userId || (g.name||'').toLowerCase().trim() === (newGuess.name||'').toLowerCase().trim())
+        && g.week === newGuess.week
+      )
     );
 
     this.data.userGuesses.push(newGuess);
@@ -314,17 +332,43 @@ class DataManager {
   // מחיקת ניחושים
   deleteUserGuess(guessId) {
     const before = this.data.userGuesses.length;
+    const toDelete = this.data.userGuesses.find(g => g.id === guessId)
+    if (toDelete) {
+      const key = `${(toDelete.name||'').toLowerCase().trim()}__${toDelete.week}`
+      if (!this.data.deletedGuessKeys.includes(key)) this.data.deletedGuessKeys.push(key)
+    }
     this.data.userGuesses = this.data.userGuesses.filter(g => g.id !== guessId);
     const after = this.data.userGuesses.length;
     if (after !== before) this.saveData();
     return before - after;
   }
 
-  deleteUserGuessesByUserAndWeek(userId, week = null) {
+  deleteUserGuessesByUserAndWeek(userIdOrName, week = null) {
     const targetWeek = (week ?? this.data.currentWeek);
     const w = Number(targetWeek);
     const before = this.data.userGuesses.length;
-    this.data.userGuesses = this.data.userGuesses.filter(g => !(g.userId === userId && Number(g.week) === w));
+
+    // תמיכה גם במחיקה לפי שם (ליישור לאיחוד החדש לפי name)
+    let nameLower = '';
+    const candidate = this.getUserById(userIdOrName);
+    if (candidate && candidate.name) {
+      nameLower = String(candidate.name).toLowerCase().trim();
+    } else if (typeof userIdOrName === 'string') {
+      // ייתכן שקיבלנו שם במקום מזהה
+      nameLower = userIdOrName.toLowerCase().trim();
+    }
+
+    if (nameLower) {
+      const key = `${nameLower}__${w}`
+      if (!this.data.deletedGuessKeys.includes(key)) this.data.deletedGuessKeys.push(key)
+    }
+
+    this.data.userGuesses = this.data.userGuesses.filter(g => {
+      const sameUser = (g.userId === userIdOrName) || (String(g.name || '').toLowerCase().trim() === nameLower);
+      const sameWeek = Number(g.week) === w;
+      return !(sameUser && sameWeek);
+    });
+
     const after = this.data.userGuesses.length;
     if (after !== before) this.saveData();
     return before - after;
@@ -334,8 +378,20 @@ class DataManager {
     const before = this.data.userGuesses.length;
     if (week !== null && week !== undefined) {
       const w = Number(week);
+      // סמן את כל מפתחות השבוע למחיקה
+      (this.data.userGuesses || []).forEach(g => {
+        if (Number(g.week) === w) {
+          const key = `${(g.name||'').toLowerCase().trim()}__${w}`
+          if (!this.data.deletedGuessKeys.includes(key)) this.data.deletedGuessKeys.push(key)
+        }
+      })
       this.data.userGuesses = this.data.userGuesses.filter(g => Number(g.week) !== w);
     } else {
+      // מחיקה מוחלטת — סמן את כל המפתחות
+      (this.data.userGuesses || []).forEach(g => {
+        const key = `${(g.name||'').toLowerCase().trim()}__${g.week}`
+        if (!this.data.deletedGuessKeys.includes(key)) this.data.deletedGuessKeys.push(key)
+      })
       this.data.userGuesses = [];
     }
     const after = this.data.userGuesses.length;

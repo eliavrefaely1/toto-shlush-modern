@@ -7,22 +7,29 @@ import dataManager from '../lib/data.js'
 
 export default function GuessPage() {
   const router = useRouter()
-  const [formData, setFormData] = useState({
-    name: '',
-    phone: '',
-    guesses: Array(16).fill('')
-  })
+  const [formData, setFormData] = useState({ name: '', guesses: Array(16).fill('') })
   const [matches, setMatches] = useState([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0)
   const [showSuccess, setShowSuccess] = useState(false)
 
   useEffect(() => {
-    // טעינת משחקים
+    // טעינת משחקים + שם מהאחסון המקומי
     (async () => {
       await dataManager.syncFromServer()
       const currentMatches = dataManager.getMatches()
       setMatches(currentMatches)
+      const storedName = localStorage.getItem('toto-current-name') || ''
+      if (storedName) {
+        setFormData(prev => ({ ...prev, name: storedName }))
+        // טעינת ניחוש קיים לשבוע הנוכחי עבור אותו שם
+        const existing = (dataManager.getUserGuesses() || []).find(
+          g => (g.name || '').toLowerCase().trim() === storedName.toLowerCase().trim()
+        )
+        if (existing && Array.isArray(existing.guesses)) {
+          setFormData(prev => ({ ...prev, guesses: existing.guesses }))
+        }
+      }
     })()
   }, [])
 
@@ -45,8 +52,8 @@ export default function GuessPage() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     
-    if (!formData.name.trim() || !formData.phone.trim()) {
-      alert('אנא מלא את השם ומספר הטלפון')
+    if (!formData.name.trim()) {
+      alert('אנא מלא את שמך המלא')
       return
     }
 
@@ -61,21 +68,16 @@ export default function GuessPage() {
 
     try {
       // יצירת משתמש אם לא קיים
-      let user = dataManager.getUsers().find(u => u.phone === formData.phone)
+      let user = dataManager.getUsers().find(u => (u.name||'').toLowerCase().trim() === formData.name.toLowerCase().trim())
       if (!user) {
         user = dataManager.addUser({
-          name: formData.name,
-          phone: formData.phone
+          name: formData.name
         })
       }
+      localStorage.setItem('toto-current-name', formData.name)
 
       // שמירת הניחושים
-      dataManager.addUserGuess({
-        userId: user.id,
-        name: formData.name,
-        phone: formData.phone,
-        guesses: formData.guesses
-      })
+      dataManager.addUserGuess({ userId: user.id, name: formData.name, guesses: formData.guesses })
 
       setShowSuccess(true)
       
@@ -102,6 +104,16 @@ export default function GuessPage() {
       setCurrentMatchIndex(currentMatchIndex - 1)
     }
   }
+
+  // ניווט באמצעות החיצים במקלדת
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'ArrowLeft') nextMatch()
+      if (e.key === 'ArrowRight') prevMatch()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [currentMatchIndex, matches.length])
 
   const getProgress = () => {
     const filled = formData.guesses.filter(g => g !== '').length
@@ -182,28 +194,13 @@ export default function GuessPage() {
             <div className="card-content">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    שם מלא *
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">שם מלא *</label>
                   <input
                     type="text"
                     value={formData.name}
                     onChange={(e) => handleInputChange('name', e.target.value)}
                     className="input"
                     placeholder="הזן את שמך"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    מספר טלפון *
-                  </label>
-                  <input
-                    type="tel"
-                    value={formData.phone}
-                    onChange={(e) => handleInputChange('phone', e.target.value)}
-                    className="input"
-                    placeholder="הזן מספר טלפון"
                     required
                   />
                 </div>
@@ -277,21 +274,22 @@ export default function GuessPage() {
                     <h4 className="font-bold text-gray-800 mb-3">סיכום הניחושים שלך:</h4>
                     <div className="grid grid-cols-8 gap-2">
                       {formData.guesses.map((guess, index) => (
-                        <div
+                        <button
+                          type="button"
                           key={index}
-                          className={`text-center p-2 rounded ${
+                          onClick={() => setCurrentMatchIndex(index)}
+                          className={`text-center p-2 rounded transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-400 ${
                             index === currentMatchIndex
                               ? 'bg-green-200 border-2 border-green-500'
                               : guess
-                              ? 'bg-green-100'
-                              : 'bg-gray-100'
+                              ? 'bg-green-100 hover:bg-green-200'
+                              : 'bg-gray-100 hover:bg-gray-200'
                           }`}
+                          aria-label={`נווט למשחק ${index + 1}`}
                         >
                           <div className="text-xs text-gray-600">{index + 1}</div>
-                          <div className="text-lg font-bold">
-                            {guess || '?'}
-                          </div>
-                        </div>
+                          <div className="text-lg font-bold">{guess || '?'}</div>
+                        </button>
                       ))}
                     </div>
                   </div>

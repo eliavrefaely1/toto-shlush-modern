@@ -8,18 +8,22 @@ import dataManager from '../lib/data.js'
 export default function LeaderboardPage() {
   const [leaderboard, setLeaderboard] = useState([])
   const [pot, setPot] = useState({ totalAmount: 0, numOfPlayers: 0 })
-  const [selectedWeek, setSelectedWeek] = useState(1)
+  const [selectedWeek, setSelectedWeek] = useState(dataManager.getSettings().currentWeek || 1)
   const [availableWeeks, setAvailableWeeks] = useState([1])
 
+  // אתחול פעם אחת: מושך מהשרת ומגדיר לשבוע הנוכחי
   useEffect(() => {
     const init = async () => {
       await dataManager.syncFromServer()
-      loadData()
+      const w = dataManager.getSettings().currentWeek || 1
+      setSelectedWeek(w)
     }
     init()
-    const onVis = () => { if (document.visibilityState === 'visible') init() }
-    document.addEventListener('visibilitychange', onVis)
-    return () => document.removeEventListener('visibilitychange', onVis)
+  }, [])
+
+  // כל שינוי בשבוע טוען מחדש את הנתונים
+  useEffect(() => {
+    loadData()
   }, [selectedWeek])
 
   const loadData = () => {
@@ -31,8 +35,10 @@ export default function LeaderboardPage() {
 
     // טעינת שבועות זמינים
     const allGuesses = dataManager.data.userGuesses
-    const weeks = [...new Set(allGuesses.map(g => g.week))].sort((a, b) => b - a)
-    setAvailableWeeks(weeks.length > 0 ? weeks : [1])
+    let weeks = [...new Set(allGuesses.map(g => g.week))]
+    if (!weeks.includes(selectedWeek)) weeks.push(selectedWeek)
+    weeks = weeks.sort((a, b) => b - a)
+    setAvailableWeeks(weeks.length > 0 ? weeks : [selectedWeek || 1])
   }
 
   const getRankIcon = (index) => {

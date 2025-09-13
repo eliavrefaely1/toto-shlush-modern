@@ -35,15 +35,17 @@ export default function AdminPage() {
     loadAdminData();
   }
 
-  const deleteMatch = (matchId) => {
+  const deleteMatch = async (matchId) => {
     if (confirm('האם אתה בטוח שברצונך למחוק את המשחק?')) {
       dataManager.deleteMatch(matchId);
+      await dataManager.mergeAndSave?.();
+      await dataManager.syncFromServer();
       const updatedMatches = dataManager.getMatches(settings.currentWeek);
       setMatches(updatedMatches);
     }
   };
 
-  const clearAllMatches = () => {
+  const clearAllMatches = async () => {
     if (confirm('האם אתה בטוח שברצונך למחוק את כל המשחקים?')) {
       console.log('Clearing all matches for week:', settings.currentWeek);
       console.log('Matches before clearing:', matches.length);
@@ -51,8 +53,13 @@ export default function AdminPage() {
       // Clear all matches for current week
       dataManager.clearAllMatches(settings.currentWeek);
       
-      // Update UI state explicitly to empty to avoid stale items
-      setMatches([]);
+      // שמירה וסנכרון מול השרת כדי שהמחיקה תהיה קבועה
+      await dataManager.mergeAndSave?.();
+      await dataManager.syncFromServer();
+      
+      // Update UI state
+      const updated = dataManager.getMatches(settings.currentWeek);
+      setMatches(updated);
       
       // Also refresh all admin data to ensure everything is in sync
       loadAdminData();
@@ -112,7 +119,7 @@ export default function AdminPage() {
     return isNaN(dt) ? '' : dt.toISOString().slice(0,10);
   };
 
-  const uploadJSON = (jsonData) => {
+  const uploadJSON = async (jsonData) => {
     try {
       const parsedData = JSON.parse(jsonData);
       
@@ -156,7 +163,9 @@ export default function AdminPage() {
         });
       }
       
-      setMatches(newMatches);
+      await dataManager.mergeAndSave?.();
+      await dataManager.syncFromServer();
+      setMatches(dataManager.getMatches(settings.currentWeek));
       alert(`נתונים נטענו בהצלחה! ${newMatches.length} משחקים נוצרו.`);
     } catch (error) {
       console.error('Error parsing JSON:', error);
@@ -199,9 +208,11 @@ export default function AdminPage() {
     }
   };
 
-  const deleteGuessesForUserCurrentWeek = (userId) => {
+  const deleteGuessesForUserCurrentWeek = async (userIdOrName) => {
     if (confirm('למחוק את הניחוש של המשתתף לשבוע הנוכחי?')) {
-      dataManager.deleteUserGuessesByUserAndWeek(userId, settings.currentWeek);
+      dataManager.deleteUserGuessesByUserAndWeek(userIdOrName, settings.currentWeek);
+      await (dataManager.mergeAndSave ? dataManager.mergeAndSave() : Promise.resolve());
+      await dataManager.syncFromServer();
       // רענון מלא של נתוני האדמין כדי לשקף את המחיקה מיד
       dataManager.calculateScores();
       loadAdminData();
@@ -209,12 +220,25 @@ export default function AdminPage() {
     }
   };
 
-  const clearAllGuessesForCurrentWeek = () => {
+  const clearAllGuessesForCurrentWeek = async () => {
     if (confirm('האם אתה בטוח שברצונך למחוק את כל הניחושים לשבוע הנוכחי?')) {
       dataManager.clearAllGuesses(settings.currentWeek);
+      await (dataManager.mergeAndSave ? dataManager.mergeAndSave() : Promise.resolve());
+      await dataManager.syncFromServer();
       dataManager.calculateScores();
       loadAdminData();
       alert('כל הניחושים לשבוע הנוכחי נמחקו.');
+    }
+  };
+
+  const deleteGuessById = async (guessId) => {
+    if (confirm('למחוק את הניחוש לשבוע הנוכחי?')) {
+      dataManager.deleteUserGuess(guessId);
+      await (dataManager.mergeAndSave ? dataManager.mergeAndSave() : Promise.resolve());
+      await dataManager.syncFromServer();
+      dataManager.calculateScores();
+      loadAdminData();
+      alert('הניחוש נמחק.');
     }
   };
 
@@ -266,9 +290,7 @@ export default function AdminPage() {
                 <Shield className="w-5 h-5 ml-2" /> כניסה
               </button>
             </form>
-            <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-              <p className="text-sm text-blue-700 text-center">🔒 סיסמת ברירת מחדל: 1234</p>
-            </div>
+            {/* הסרת הצגת סיסמת ברירת מחדל */}
           </div>
         </div>
       </div>
@@ -561,7 +583,6 @@ export default function AdminPage() {
                         <div className="flex items-center justify-between">
                           <div>
                             <h3 className="font-bold text-blue-800">{user.name}</h3>
-                            <p className="text-gray-600">{user.phone}</p>
                             <p className="text-sm text-gray-500">
                               הצטרף: {new Date(user.createdAt).toLocaleDateString('he-IL')}
                             </p>
@@ -569,14 +590,10 @@ export default function AdminPage() {
                           </div>
                           <div className="text-right">
                             <div className="text-2xl font-bold text-blue-600">
-                              {leaderboard.find(l => l.userId === user.id)?.score || 0}
+                              {leaderboard.find(l => l.userId === user.id || l.user?.name === user.name || l.name === user.name)?.score || 0}
                             </div>
                             <div className="text-sm text-gray-500">נקודות</div>
-                            <button
-                              onClick={() => deleteGuessesForUserCurrentWeek(user.id)}
-                              className="btn btn-danger mt-2 flex items-center gap-2"
-                              disabled={false}
-                            >
+                            <button onClick={() => deleteGuessById(guess.id)} className="btn btn-danger mt-2 flex items-center gap-2">
                               <Trash2 className="w-4 h-4" /> מחק ניחוש לשבוע
                             </button>
                           </div>
