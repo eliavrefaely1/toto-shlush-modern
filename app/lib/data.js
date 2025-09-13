@@ -84,7 +84,8 @@ class DataManager {
       matches: [],
       users: [],
       userGuesses: [],
-      pots: []
+      pots: [],
+      deletedWeeks: []
     };
   }
 
@@ -130,10 +131,25 @@ class DataManager {
     merged.adminPassword = server.adminPassword || local.adminPassword || '1234'
     merged.entryFee = local.entryFee ?? server.entryFee ?? 35
 
-    // משחקים — לא נדרוס מהטלפון. אם אין בשרת בכלל, נקח מקומי.
-    merged.matches = Array.isArray(server.matches) && server.matches.length > 0
-      ? server.matches
-      : (local.matches || [])
+    // משחקים — מאחדים לפי שבוע, ומכבדים מחיקות מקומיות (deletedWeeks)
+    const srvMatches = Array.isArray(server.matches) ? server.matches : []
+    const locMatches = Array.isArray(local.matches) ? local.matches : []
+    const deletedWeeks = (local.deletedWeeks || []).map(Number)
+    const byWeek = new Map()
+    // התחל בשרת
+    srvMatches.forEach(m => {
+      const w = Number(m.week)
+      if (!byWeek.has(w)) byWeek.set(w, [])
+      byWeek.get(w).push(m)
+    })
+    // מחיקות מקומיות גוברות
+    deletedWeeks.forEach(w => byWeek.set(Number(w), []))
+    // מקומי גובר לשבועות שיש להם מידע (למשל אחרי העלאת JSON)
+    const locWeeks = new Set(locMatches.map(m => Number(m.week)))
+    locWeeks.forEach(w => {
+      byWeek.set(Number(w), locMatches.filter(m => Number(m.week) === Number(w)))
+    })
+    merged.matches = Array.from(byWeek.values()).flat()
 
     // משתמשים — מאחדים לפי phone (מפתח יציב יותר מ‑id)
     const byPhone = new Map()
@@ -166,6 +182,8 @@ class DataManager {
     // pots לא נשמר כרשימה — מחשבים דינמית; נשמר אם קיים
     merged.pots = server.pots || local.pots || []
 
+    // איפוס דגלי מחיקה לאחר שמירה
+    merged.deletedWeeks = []
     return merged
   }
 
@@ -216,9 +234,15 @@ class DataManager {
       const w = Number(week);
       console.log(`Clearing matches for week: ${w}`);
       this.data.matches = this.data.matches.filter(m => Number(m.week) !== w);
+      if (!this.data.deletedWeeks.includes(w)) this.data.deletedWeeks.push(w);
     } else {
       console.log('Clearing all matches');
       this.data.matches = [];
+      const weeks = new Set([
+        ...this.data.userGuesses.map(g => Number(g.week)),
+        ...this.data.matches.map(m => Number(m.week))
+      ]);
+      this.data.deletedWeeks = Array.from(weeks);
     }
     this.saveData();
     console.log('Matches after clearing:', this.data.matches);
