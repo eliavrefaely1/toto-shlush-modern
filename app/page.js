@@ -10,7 +10,6 @@ export default function Home() {
   const router = useRouter()
   const [pot, setPot] = useState({ totalAmount: 0, numOfPlayers: 0 })
   const [leaderboard, setLeaderboard] = useState([])
-  const [motivationalQuote, setMotivationalQuote] = useState('')
 
   useEffect(() => {
     const init = async () => {
@@ -21,22 +20,6 @@ export default function Home() {
       setLeaderboard(currentLeaderboard)
     }
     init()
-
-    // משפט מוטיבציה לפי האיפיון
-    const quotes = [
-      "לטוטו שלוש הגעת – את הקופה כמעט לקחת! 🎯",
-      "יצאת עגל – 3 ניחושים השבוע? 🐄",
-      "הכסף קורא לך - תענה! 💰",
-      "עוד משחק אחד נכון ואתה במקום הראשון! 🏆",
-      "הקופה מחכה לזוכה החכם! 💼",
-      "טוטו זה לא מזל, זה כישרון! ⚽",
-      "16 נכונים = הקופה שלך! 🎉",
-      "כל ניחוש נכון = צעד לקופה! 👑",
-      "מי שלא מנחש הרבה, יצאת עגל! 🐄",
-      "הקופה גדלה - הזמן לנחש! 💵"
-    ]
-    
-    setMotivationalQuote(quotes[Math.floor(Math.random() * quotes.length)])
 
     const onVis = () => { if (document.visibilityState === 'visible') init() }
     document.addEventListener('visibilitychange', onVis)
@@ -67,25 +50,24 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100" dir="rtl">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100" dir="rtl">
       <div className="relative z-10">
         {/* כותרת עליונה */}
-        <header className="bg-white/80 backdrop-blur border-b border-gray-200 shadow-sm">
-          <div className="max-w-6xl mx-auto px-4 py-4">
+        <header className="bg-white/80 backdrop-blur border-b border-gray-200 shadow-md rounded-lg mb-6">
+          <div className="max-w-6xl mx-auto px-4 py-6">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
-                  <Trophy className="w-6 h-6 text-white" />
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg">
+                  <Trophy className="w-7 h-7 text-white" />
                 </div>
                 <div>
-                  <h1 className="text-2xl font-bold text-blue-800">טוטו שלוש</h1>
-                  <p className="text-sm text-gray-600">המקום לזכות בגדול</p>
+                  <h1 className="text-3xl font-bold text-blue-800">טוטו שלוש</h1>
+                  <p className="text-base text-gray-600">המקום לזכות בגדול</p>
                 </div>
               </div>
-              
-              <nav className="flex gap-2">
-                <button onClick={refreshData} className="btn btn-secondary flex items-center gap-2">
-                  <RefreshCw className="w-4 h-4" />
+              <nav className="flex gap-3">
+                <button onClick={refreshData} className="btn btn-primary flex items-center gap-2 shadow-md">
+                  <RefreshCw className="w-5 h-5" />
                   רענן
                 </button>
               </nav>
@@ -93,32 +75,68 @@ export default function Home() {
           </div>
         </header>
 
-        <main className="max-w-6xl mx-auto px-4 py-8">
-          {/* משפט מוטיבציה */}
-          <div className="bg-blue-50 border border-blue-100 p-6 rounded-2xl shadow mb-8 text-center">
-            <div className="text-4xl mb-3">🎯</div>
-            <p className="text-blue-900 font-bold text-xl">
-              {motivationalQuote}
-            </p>
-          </div>
+        <main className="max-w-6xl mx-auto px-4 py-8 space-y-8">
+          {/* טבלת דירוג מהירה */}
+          {leaderboard.length > 0 && (
+            <div className="card">
+              <div className="card-header">
+                <h3 className="text-xl font-bold text-blue-800 flex items-center gap-2">
+                  <Users className="w-6 h-6" />
+                  דירוג מהיר
+                </h3>
+              </div>
+              <div className="card-content">
+                <div className="space-y-3">
+                  {leaderboard.slice(0, 5).map((entry, index) => (
+                    <div key={entry.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-md">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-white ${
+                          index === 0 ? 'bg-blue-600' :
+                          index === 1 ? 'bg-blue-500' :
+                          index === 2 ? 'bg-blue-400' :
+                          'bg-blue-300'
+                        }`}>
+                          {index + 1}
+                        </div>
+                        <div>
+                          <div className="font-bold text-sm">{entry.user?.name || entry.name}</div>
+                          <div className="text-xs text-gray-500">{entry.user?.phone || entry.phone}</div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-lg font-bold text-blue-600">{entry.score}</div>
+                        <div className="text-xs text-gray-500">נקודות</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {leaderboard.length > 5 && (
+                  <div className="text-center mt-4">
+                    <Link href="/leaderboard" className="btn btn-secondary">
+                      צפה בכל הדירוג
+                    </Link>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* קופה שבועית */}
-          <div className="card mb-8">
+          <div className="card shadow-md rounded-lg">
             <div className="card-header">
-              <h2 className="text-2xl font-bold text-center text-blue-800 flex items-center justify-center gap-3">
-                <Gift className="w-8 h-8" />
+              <h3 className="text-xl font-bold text-blue-800 flex items-center gap-2">
+                <Gift className="w-6 h-6 text-gray-600" />
                 הקופה השבועית
-              </h2>
+              </h3>
             </div>
-            <div className="card-content">
-              <div className="bg-blue-50 border border-blue-100 rounded-2xl p-6 text-center text-blue-900">
-                <div className="text-5xl font-bold mb-2">
+            <div className="card-content bg-white rounded-b-lg">
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center text-gray-800">
+                <div className="text-4xl font-bold mb-2">
                   ₪{pot.totalAmount.toLocaleString()}
                 </div>
                 <p className="text-lg">
                   {pot.numOfPlayers} משתתפים × ₪{pot.amountPerPlayer}
                 </p>
-                <p className="mt-4 text-sm text-blue-700">הזוכה לוקח הכל</p>
               </div>
             </div>
           </div>
@@ -151,54 +169,6 @@ export default function Home() {
               </div>
             </Link>
           </div>
-
-          {/* טבלת דירוג מהירה */}
-          {leaderboard.length > 0 && (
-            <div className="card">
-              <div className="card-header">
-                <h3 className="text-xl font-bold text-blue-800 flex items-center gap-2">
-                  <Users className="w-6 h-6" />
-                  דירוג מהיר
-                </h3>
-              </div>
-              <div className="card-content">
-                <div className="space-y-3">
-                  {leaderboard.slice(0, 5).map((entry, index) => (
-                    <div key={entry.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-white ${
-                          index === 0 ? 'bg-blue-600' :
-                          index === 1 ? 'bg-blue-500' :
-                          index === 2 ? 'bg-blue-400' :
-                          'bg-blue-300'
-                        }`}>
-                          {index + 1}
-                        </div>
-                        <div>
-                          <div className="font-bold text-lg">{entry.user?.name || entry.name}</div>
-                          <div className="text-sm text-gray-500">{entry.user?.phone || entry.phone}</div>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-2xl font-bold text-blue-600">{entry.score}</div>
-                        <div className="text-sm text-gray-500">נקודות</div>
-                        <div className="text-xs text-gray-400 mt-1">
-                          {getScoreMessage(entry.score)}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                {leaderboard.length > 5 && (
-                  <div className="text-center mt-4">
-                    <Link href="/leaderboard" className="btn btn-secondary">
-                      צפה בכל הדירוג
-                    </Link>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
         </main>
 
         {/* כותרת תחתונה */}

@@ -5,6 +5,44 @@ import Link from 'next/link'
 import { Trophy, Medal, Star, Target, ArrowLeft, Crown, Award, RefreshCw } from 'lucide-react'
 import dataManager from '../lib/data.js'
 
+const Leaderboard = () => {
+  const players = [
+    { rank: 1, name: 'תומר עדיני', points: 50 },
+    { rank: 2, name: 'אדיר לריח', points: 43.5 },
+    { rank: 3, name: 'Adam Zerhen', points: 42 },
+    { rank: 4, name: 'שי חן', points: 41 },
+    { rank: 5, name: 'לירון גרתי', points: 40.5 },
+    { rank: 6, name: 'Ohad Forer', points: 40 },
+    { rank: 7, name: 'rang clan', points: 39.5 },
+    { rank: 8, name: 'Yuval Morag', points: 39.5 },
+    { rank: 9, name: 'Itay Emanuel', points: 39 },
+  ];
+
+  return (
+    <div className="max-w-4xl mx-auto p-4">
+      <h1 className="text-2xl font-bold mb-4">טבלת דירוג</h1>
+      <table className="w-full border-collapse border border-gray-300 text-sm">
+        <thead>
+          <tr className="bg-gray-100">
+            <th className="border border-gray-300 p-2">דירוג</th>
+            <th className="border border-gray-300 p-2">שם</th>
+            <th className="border border-gray-300 p-2">נקודות</th>
+          </tr>
+        </thead>
+        <tbody>
+          {players.map((player) => (
+            <tr key={player.rank} className="text-center">
+              <td className="border border-gray-300 p-2">{player.rank}</td>
+              <td className="border border-gray-300 p-2">{player.name}</td>
+              <td className="border border-gray-300 p-2">{player.points}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
 export default function LeaderboardPage() {
   const [leaderboard, setLeaderboard] = useState([])
   const [pot, setPot] = useState({ totalAmount: 0, numOfPlayers: 0 })
