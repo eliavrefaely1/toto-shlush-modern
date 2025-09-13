@@ -35,9 +35,8 @@ export default function AdminPage() {
       await dataManager.syncFromServer();
       loadAdminData();
     } finally {
-      if (typeof window !== 'undefined') {
-        window.location.reload();
-      }
+      // Use router.refresh() instead of window.location.reload()
+      router.refresh();
     }
   }
 

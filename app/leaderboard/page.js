@@ -118,9 +118,8 @@ export default function LeaderboardPage() {
       await dataManager.syncFromServer();
       loadData();
     } finally {
-      if (typeof window !== 'undefined') {
-        window.location.reload();
-      }
+      // Use router.refresh() instead of window.location.reload()
+      router.refresh();
     }
   }
 

@@ -33,12 +33,14 @@ class DataManager {
     }
   }
 
-  saveData() {
+  saveData(router) {
     if (typeof window === 'undefined') return;
     try {
       localStorage.setItem(this.storageKey, JSON.stringify(this.data));
-      // סנכרון לשרת עם מיזוג כדי למנוע דריסה של נתונים ממכשיר אחר
-      this.mergeAndSave().catch(() => {});
+      // Use router.refresh() if router is provided
+      if (router) {
+        router.refresh();
+      }
     } catch (error) {
       console.error('Error saving data:', error);
     }
@@ -414,14 +416,23 @@ class DataManager {
 
     guesses.forEach(guess => {
       let score = 0;
+      const correctGuesses = [];
+
       matches.forEach((match, index) => {
-        if (match.result && guess.guesses[index] === match.result) {
+        const isCorrect = match.result && guess.guesses[index] === match.result;
+        if (!match.result) {
+          console.log(`Match ${index + 1}: No result available, marking as incorrect.`);
+          correctGuesses.push(false);
+        } else {
+          correctGuesses.push(isCorrect);
+        }
+        if (isCorrect) {
           score++;
         }
       });
 
-      if (guess.score !== score) {
-        this.updateUserGuess(guess.id, { score });
+      if (guess.score !== score || !guess.correct) {
+        this.updateUserGuess(guess.id, { score, correct: correctGuesses });
       }
     });
 

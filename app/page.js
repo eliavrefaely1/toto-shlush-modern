@@ -42,9 +42,10 @@ export default function Home() {
     } finally {
       // רענון מלא של העמוד כדי לוודא עדכון מוחלט
       if (typeof window !== 'undefined') {
-        window.location.reload()
+        // Use router.refresh() instead of window.location.reload()
+        router.refresh();
       } else {
-        router.refresh()
+        router.refresh();
       }
     }
   }
@@ -82,7 +83,7 @@ export default function Home() {
               <div className="card-header">
                 <h3 className="text-xl font-bold text-blue-800 flex items-center gap-2">
                   <Users className="w-6 h-6" />
-                  דירוג מהיר
+                  טבלת המחזור
                 </h3>
               </div>
               <div className="card-content">
@@ -106,6 +107,18 @@ export default function Home() {
                       <div className="text-right">
                         <div className="text-lg font-bold text-blue-600">{entry.score}</div>
                         <div className="text-xs text-gray-500">נקודות</div>
+                      </div>
+                      <div className="mt-2">
+                        {entry.guesses.map((guess, i) => (
+                          <span
+                            key={i}
+                            className={`inline-block px-2 py-1 rounded-full text-white text-xs font-bold ${
+                              guess.correct ? 'bg-green-500' : 'bg-red-500'
+                            }`}
+                          >
+                            {guess.value}
+                          </span>
+                        ))}
                       </div>
                     </div>
                   ))}
