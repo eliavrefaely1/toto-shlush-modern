@@ -405,10 +405,12 @@ export default function LeaderboardPage() {
               <div className="space-y-3">
                 {leaderboard.map((entry, index) => (
                   <div key={entry.id}>
-                    <div className="flex items-center justify-between p-2 bg-gray-50 rounded-md">
+                    <div className={`flex items-center justify-between p-2 rounded-md ${
+                      index === 0 ? 'bg-green-50 border border-green-200' : 'bg-gray-50'
+                    }`}>
                       <div className="flex items-center gap-2">
                         <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-white ${
-                          index === 0 ? 'bg-blue-600' :
+                          index === 0 ? 'bg-green-600' :
                           index === 1 ? 'bg-blue-500' :
                           index === 2 ? 'bg-blue-400' :
                           'bg-blue-300'
