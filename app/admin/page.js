@@ -23,6 +23,9 @@ export default function AdminPage() {
   const [leaderboard, setLeaderboard] = useState([]);
   const [pot, setPot] = useState({ totalAmount: 0, numOfPlayers: 0 });
   const [isRefreshing, setIsRefreshing] = useState(false);
+  // מיון
+  const [sortWeek, setSortWeek] = useState('score_desc'); // score_desc | score_asc | name_asc | name_desc
+  const [sortAll, setSortAll] = useState('name_asc');     // name_asc | name_desc | joined_new | joined_old | hasguess_first
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -638,13 +641,53 @@ export default function AdminPage() {
             guess: g,
             user: participants.find(p => p.id === g.userId) || { id: g.userId, name: g.name, phone: g.phone, createdAt: g.createdAt }
           }));
+          const byUserId = new Map(guessesThisWeek.map(g => [g.userId, g]))
+          const scoreById = new Map(leaderboard.map(l => [l.userId, l.score]))
+          const scoreByName = new Map(leaderboard.map(l => [String(l.name||'').toLowerCase().trim(), l.score]))
+          const getScore = (u) => (scoreById.get(u.id) ?? scoreByName.get(String(u.name||'').toLowerCase().trim()) ?? 0)
+
+          const sortedWeek = [...participantsWithGuess].sort((a,b) => {
+            const sa = getScore(a.user), sb = getScore(b.user)
+            const na = String(a.user.name||'').toLowerCase(), nb = String(b.user.name||'').toLowerCase()
+            switch (sortWeek) {
+              case 'score_asc': return sa - sb || na.localeCompare(nb)
+              case 'name_asc': return na.localeCompare(nb)
+              case 'name_desc': return nb.localeCompare(na)
+              case 'score_desc':
+              default: return sb - sa || na.localeCompare(nb)
+            }
+          })
+
+          const sortedAll = [...participants].sort((a,b) => {
+            const hasA = byUserId.has(a.id), hasB = byUserId.has(b.id)
+            const na = String(a.name||'').toLowerCase(), nb = String(b.name||'').toLowerCase()
+            const ta = new Date(a.createdAt||0).getTime(), tb = new Date(b.createdAt||0).getTime()
+            switch (sortAll) {
+              case 'name_desc': return nb.localeCompare(na)
+              case 'joined_new': return tb - ta
+              case 'joined_old': return ta - tb
+              case 'hasguess_first': return (hasB?1:0) - (hasA?1:0) || nb.localeCompare(na)
+              case 'name_asc':
+              default: return na.localeCompare(nb)
+            }
+          })
           return (
           <div className="space-y-6">
+            {/* טבלת דירוג לשבוע הנוכחי (כמו היום) */}
             <div className="card">
               <div className="card-header">
-                <h2 className="text-xl font-bold text-blue-800">משתתפים</h2>
+                <h2 className="text-xl font-bold text-blue-800">משתתפים — שבוע {settings.currentWeek}</h2>
                 <div className="flex items-center justify-between flex-wrap gap-2">
-                  <p className="text-gray-600">{participantsWithGuess.length} משתתפים עם ניחוש לשבוע {settings.currentWeek}</p>
+                  <p className="text-gray-600">{participantsWithGuess.length} משתתפים עם ניחוש לשבוע זה</p>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm text-gray-600">מיין לפי:</label>
+                    <select value={sortWeek} onChange={(e)=>setSortWeek(e.target.value)} className="input w-44 text-sm">
+                      <option value="score_desc">ניקוד (גבוה→נמוך)</option>
+                      <option value="score_asc">ניקוד (נמוך→גבוה)</option>
+                      <option value="name_asc">שם (א׳→ת׳)</option>
+                      <option value="name_desc">שם (ת׳→א׳)</option>
+                    </select>
+                  </div>
                   <button onClick={clearAllGuessesForCurrentWeek} className="btn btn-danger flex items-center gap-2">
                     <Trash2 className="w-4 h-4" /> מחק את כל ניחושי השבוע
                   </button>
@@ -658,7 +701,7 @@ export default function AdminPage() {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {participantsWithGuess.map(({ user, guess }) => (
+                    {sortedWeek.map(({ user, guess }) => (
                       <div key={guess.id} className="border rounded-lg p-4 bg-gray-50">
                         <div className="flex items-center justify-between">
                           <div>
@@ -669,9 +712,7 @@ export default function AdminPage() {
                             <div className="mt-2 text-xs text-blue-600">ניחוש קיים לשבוע {settings.currentWeek}</div>
                           </div>
                           <div className="text-right">
-                            <div className="text-2xl font-bold text-blue-600">
-                              {leaderboard.find(l => l.userId === user.id || l.user?.name === user.name || l.name === user.name)?.score || 0}
-                            </div>
+                            <div className="text-2xl font-bold text-blue-600">{getScore(user)}</div>
                             <div className="text-sm text-gray-500">נקודות</div>
                             <div className="flex flex-col gap-2 mt-2">
                               <button onClick={() => deleteGuessById(guess.id)} className="btn btn-danger flex items-center gap-2">
@@ -685,6 +726,68 @@ export default function AdminPage() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* כל המשתמשים אי פעם במערכת */}
+            <div className="card">
+              <div className="card-header">
+                <h2 className="text-xl font-bold text-blue-800">כל המשתמשים</h2>
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <p className="text-gray-600">סה"כ {participants.length} משתמשים</p>
+                  <div className="flex items-center gap-2">
+                    <label className="text-sm text-gray-600">מיין לפי:</label>
+                    <select value={sortAll} onChange={(e)=>setSortAll(e.target.value)} className="input w-64 text-sm">
+                      <option value="name_asc">שם (א׳→ת׳)</option>
+                      <option value="name_desc">שם (ת׳→א׳)</option>
+                      <option value="joined_new">תאריך הצטרפות (חדש→ישן)</option>
+                      <option value="joined_old">תאריך הצטרפות (ישן→חדש)</option>
+                      <option value="hasguess_first">יש ניחוש לשבוע (תחילה)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div className="card-content">
+                {participants.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-500">אין משתמשים רשומים</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {sortedAll.map((u) => {
+                      const g = byUserId.get(u.id)
+                      const score = getScore(u)
+                      return (
+                        <div key={u.id} className="flex items-center justify-between border rounded-lg p-3 bg-white">
+                          <div>
+                            <div className="font-bold text-blue-800">{u.name}</div>
+                            <div className="text-xs text-gray-500">הצטרף: {new Date(u.createdAt).toLocaleDateString('he-IL')}</div>
+                            {g ? (
+                              <div className="text-xs text-green-700 mt-1">יש ניחוש לשבוע {settings.currentWeek}</div>
+                            ) : (
+                              <div className="text-xs text-gray-500 mt-1">אין ניחוש לשבוע {settings.currentWeek}</div>
+                            )}
+                          </div>
+                          <div className="text-right">
+                            <div className="text-sm text-gray-500">ניקוד שבועי</div>
+                            <div className="text-lg font-bold text-blue-600 text-right">{score || 0}</div>
+                            <div className="flex gap-2 mt-2">
+                              {g ? (
+                                <button onClick={() => deleteGuessById(g.id)} className="btn btn-danger flex items-center gap-2">
+                                  <Trash2 className="w-4 h-4" /> מחק ניחוש לשבוע
+                                </button>
+                              ) : null}
+                              <button onClick={() => deleteUserCompletely(u.id)} className="btn btn-danger flex items-center gap-2">
+                                <Trash2 className="w-4 h-4" /> מחק משתמש
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 )}
               </div>
