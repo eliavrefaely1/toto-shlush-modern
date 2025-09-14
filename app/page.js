@@ -16,7 +16,13 @@ export default function Home() {
   useEffect(() => {
     const init = async () => {
       await dataManager.syncFromServer()
-      const currentPot = dataManager.getPot()
+      // משוך קופה מהשרת (קל משקל)
+      let currentPot = dataManager.getPot()
+      try {
+        const w = dataManager.getSettings().currentWeek || 1
+        const resPot = await fetch(`/api/pot?week=${w}`, { cache: 'no-store' })
+        if (resPot.ok) currentPot = await resPot.json()
+      } catch (_) {}
       // משוך דירוג מהיר מהשרת (קל משקל)
       try {
         const w = dataManager.getSettings().currentWeek || 1
@@ -45,7 +51,11 @@ export default function Home() {
     setIsRefreshing(true)
     try {
       await dataManager.syncFromServer()
-      setPot(dataManager.getPot())
+      try {
+        const w = dataManager.getSettings().currentWeek || 1
+        const resPot = await fetch(`/api/pot?week=${w}`, { cache: 'no-store' })
+        if (resPot.ok) setPot(await resPot.json()); else setPot(dataManager.getPot())
+      } catch (_) { setPot(dataManager.getPot()) }
       try {
         const w = dataManager.getSettings().currentWeek || 1
         const res = await fetch(`/api/leaderboard?week=${w}`, { cache: 'no-store' })
