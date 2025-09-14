@@ -89,6 +89,8 @@ export default function GuessPage() {
 
       // שמירת הניחושים
       dataManager.addUserGuess({ userId: user.id, name: formData.name, guesses: formData.guesses })
+      // ודא סנכרון לשרת כדי שכל המכשירים יראו אותו הדבר
+      await (dataManager.mergeAndSave ? dataManager.mergeAndSave() : Promise.resolve())
 
       setShowSuccess(true)
       

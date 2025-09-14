@@ -41,6 +41,10 @@ class DataManager {
       if (router) {
         router.refresh();
       }
+      // Push to server so all devices see the same data
+      // Fire-and-forget; merge with server to avoid overwriting
+      // No await to keep UI responsive
+      this.mergeAndSave?.();
     } catch (error) {
       // suppressed console output
     }
@@ -147,18 +151,13 @@ class DataManager {
   _mergeData(server, local) {
     const merged = { ...server }
 
-    // הגדרות — עדיפות לשרת אם קיימות
-    merged.currentWeek = local.currentWeek || server.currentWeek
+    // הגדרות — השרת הוא מקור אמת כדי שכל המכשירים יראו אותו הדבר
+    merged.currentWeek = (server.currentWeek ?? local.currentWeek ?? 1)
     merged.adminPassword = server.adminPassword || local.adminPassword || '1234'
-    merged.entryFee = local.entryFee ?? server.entryFee ?? 35
-    // שמירת מצב נעילת הגשות — ערך מקומי גובר אם הוגדר
-    if (typeof local.submissionsLocked === 'boolean') {
-      merged.submissionsLocked = !!local.submissionsLocked
-    } else {
-      merged.submissionsLocked = !!server.submissionsLocked
-    }
+    merged.entryFee = (server.entryFee ?? local.entryFee ?? 35)
+    merged.submissionsLocked = (server.submissionsLocked ?? local.submissionsLocked ?? false)
 
-    // משחקים — מאחדים לפי שבוע, ומכבדים מחיקות מקומיות (deletedWeeks)
+    // משחקים — שרת הוא מקור אמת; כבד מחיקות מקומיות והוסף שבועות שחסרים בשרת
     const srvMatches = Array.isArray(server.matches) ? server.matches : []
     const locMatches = Array.isArray(local.matches) ? local.matches : []
     const deletedWeeks = (local.deletedWeeks || []).map(Number)
@@ -169,12 +168,15 @@ class DataManager {
       if (!byWeek.has(w)) byWeek.set(w, [])
       byWeek.get(w).push(m)
     })
-    // מחיקות מקומיות גוברות
+    // מחיקות מקומיות גוברות (למחיקת שבועות שלמים שערך המשתמש)
     deletedWeeks.forEach(w => byWeek.set(Number(w), []))
-    // מקומי גובר לשבועות שיש להם מידע (למשל אחרי העלאת JSON)
+    // הוסף שבועות מקומיים שלא קיימים בשרת או ריקים בו
     const locWeeks = new Set(locMatches.map(m => Number(m.week)))
     locWeeks.forEach(w => {
-      byWeek.set(Number(w), locMatches.filter(m => Number(m.week) === Number(w)))
+      const list = byWeek.get(Number(w)) || []
+      if (list.length === 0) {
+        byWeek.set(Number(w), locMatches.filter(m => Number(m.week) === Number(w)))
+      }
     })
     merged.matches = Array.from(byWeek.values()).flat()
 

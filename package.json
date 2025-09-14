@@ -4,10 +4,10 @@
   "description": "אפליקציית טוטו החברים - המקום לזכות בגדול!",
   "main": "app/layout.js",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3001",
     "dev:3001": "next dev -p 3001",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p 3001",
     "start:3001": "next start -p 3001",
     "lint": "next lint",
     "clean": "rm -rf .next node_modules/.cache"

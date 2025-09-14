@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Trophy, Medal, Star, Target, ArrowLeft, Crown, Award, RefreshCw } from 'lucide-react'
 import dataManager from '../lib/data.js'
 
@@ -44,6 +45,7 @@ const Leaderboard = () => {
 };
 
 export default function LeaderboardPage() {
+  const router = useRouter()
   const [leaderboard, setLeaderboard] = useState([])
   const [pot, setPot] = useState({ totalAmount: 0, numOfPlayers: 0 })
   const [selectedWeek, setSelectedWeek] = useState(dataManager.getSettings().currentWeek || 1)

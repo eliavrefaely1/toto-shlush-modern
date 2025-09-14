@@ -35,19 +35,9 @@ export default function Home() {
   }
 
   const refreshData = async () => {
-    try {
-      await dataManager.syncFromServer()
-      setPot(dataManager.getPot())
-      setLeaderboard(dataManager.getLeaderboard())
-    } finally {
-      // רענון מלא של העמוד כדי לוודא עדכון מוחלט
-      if (typeof window !== 'undefined') {
-        // Use router.refresh() instead of window.location.reload()
-        router.refresh();
-      } else {
-        router.refresh();
-      }
-    }
+    await dataManager.syncFromServer()
+    setPot(dataManager.getPot())
+    setLeaderboard(dataManager.getLeaderboard())
   }
 
   return (
