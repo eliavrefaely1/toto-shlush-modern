@@ -36,7 +36,9 @@ const defaultData = {
   pots: [],
   deletedWeeks: [],
   deletedGuessKeys: [],
-  deletedUsers: []
+  deletedUsers: [],
+  countdownActive: false,
+  countdownTarget: ''
 }
 
 export const POST = async () => {
@@ -125,6 +127,8 @@ export async function GET(request) {
         filtered.adminPassword = meta?.adminPassword ?? raw.adminPassword
         filtered.entryFee = meta?.entryFee ?? raw.entryFee
         filtered.submissionsLocked = (meta?.submissionsLocked ?? raw.submissionsLocked) ?? false
+        filtered.countdownActive = (meta?.countdownActive ?? raw.countdownActive) ?? false
+        filtered.countdownTarget = meta?.countdownTarget ?? raw.countdownTarget ?? ''
       }
       if (wanted.has('matches')) filtered.matches = data.matches || []
       if (wanted.has('guesses') || wanted.has('userGuesses')) filtered.userGuesses = data.userGuesses || []
@@ -179,6 +183,10 @@ export async function PUT(req) {
       toSave.userGuesses = incomingGuesses
     }
 
+    // הגנה: אל תפעיל שעון ללא יעד תקין
+    if (toSave.countdownActive && !toSave.countdownTarget) {
+      toSave.countdownActive = false
+    }
     await kv.set(KEY, toSave)
 
     // Also persist split-keys for faster targeted reads
@@ -187,6 +195,8 @@ export async function PUT(req) {
       adminPassword: toSave.adminPassword ?? defaultData.adminPassword,
       entryFee: toSave.entryFee ?? defaultData.entryFee,
       submissionsLocked: !!toSave.submissionsLocked,
+      countdownActive: !!toSave.countdownActive,
+      countdownTarget: toSave.countdownTarget || ''
     }
     try { await kv.set(META_KEY, metaToSave) } catch (_) {}
 

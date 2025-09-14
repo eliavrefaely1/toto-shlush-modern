@@ -11,6 +11,7 @@ export default function Home() {
   const [pot, setPot] = useState({ totalAmount: 0, numOfPlayers: 0 })
   const [leaderboard, setLeaderboard] = useState([])
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [countdown, setCountdown] = useState({active:false, target:'', d:0,h:0,m:0,s:0})
   const topScore = leaderboard.length ? leaderboard[0].score : null
 
   useEffect(() => {
@@ -37,6 +38,12 @@ export default function Home() {
         setLeaderboard(dataManager.getLeaderboard())
       }
       setPot(currentPot)
+      const s = dataManager.getSettings()
+      if (s.countdownActive && s.countdownTarget) {
+        setCountdown({active:true, target:s.countdownTarget, d:0,h:0,m:0,s:0})
+      } else {
+        setCountdown({active:false, target:'', d:0,h:0,m:0,s:0})
+      }
     }
     init()
 
@@ -78,6 +85,48 @@ export default function Home() {
     }
   }
 
+  // טיימר שעון רץ
+  useEffect(() => {
+    if (!countdown.active || !countdown.target) return
+    const parseLocal = (s) => {
+      // Expecting YYYY-MM-DDTHH:mm or full ISO; build as local time to avoid TZ issues
+      try {
+        if (!s) return null
+        if (s.includes('T')) {
+          const [d,t] = s.split('T')
+          const [y,m,da] = d.split('-').map(n=>parseInt(n,10))
+          const [hh,mm] = (t||'').slice(0,5).split(':').map(n=>parseInt(n,10))
+          if (Number.isFinite(y) && Number.isFinite(m) && Number.isFinite(da)) {
+            return new Date(y, (m||1)-1, da, hh||0, mm||0, 0)
+          }
+        }
+        const dt = new Date(s)
+        return isNaN(dt.getTime()) ? null : dt
+      } catch { return null }
+    }
+    const calc = () => {
+      const now = new Date()
+      const tgt = parseLocal(countdown.target)
+      if (!tgt) return
+      const diff = tgt.getTime() - now.getTime()
+      if (diff <= 0) {
+        setCountdown((c)=>({...c,d:0,h:0,m:0,s:0, active:false}))
+        // נעל הגשה אוטומטית וכבה שעון
+        dataManager.updateSettings({ submissionsLocked: true, countdownActive: false })
+        dataManager.mergeAndSave?.()
+        return
+      }
+      const d = Math.floor(diff / (1000*60*60*24))
+      const h = Math.floor((diff % (1000*60*60*24))/(1000*60*60))
+      const m = Math.floor((diff % (1000*60*60))/(1000*60))
+      const s = Math.floor((diff % (1000*60))/1000)
+      setCountdown((c)=>({...c,d,h,m,s}))
+    }
+    calc()
+    const iv = setInterval(calc, 1000)
+    return ()=>clearInterval(iv)
+  }, [countdown.active, countdown.target])
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100" dir="rtl">
       <div className="relative z-10">
@@ -105,6 +154,21 @@ export default function Home() {
         </header>
 
         <main className="max-w-6xl mx-auto px-4 py-8 space-y-8">
+          {/* שעון רץ */}
+          {countdown.active && (
+            <div className="card mb-4">
+              <div className="card-content text-center bg-blue-50 rounded">
+                <h3 className="text-2xl font-bold text-blue-900 mb-2">סגירת הגשת הטפסים בעוד</h3>
+                <div className="flex justify-center gap-6 text-4xl font-extrabold text-700">
+                  <div><div>{String(countdown.s).padStart(2,'0')}</div><div className="text-sm font-normal">שניות</div></div>
+                  <div><div>{String(countdown.m).padStart(2,'0')}</div><div className="text-sm font-normal">דקות</div></div>
+                  <div><div>{String(countdown.h).padStart(2,'0')}</div><div className="text-sm font-normal">שעות</div></div>
+                  <div><div>{String(countdown.d).padStart(2,'0')}</div><div className="text-sm font-normal">ימים</div></div>
+                </div>
+                <div className="text-sm text-gray-600 mt-2"> {}</div>
+              </div>
+            </div>
+          )}
           {/* טבלת דירוג מהירה */}
           {leaderboard.length > 0 && (
             <div className="card">

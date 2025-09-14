@@ -34,7 +34,7 @@ class DataManager {
     }
   }
 
-  saveData(router) {
+  saveData(router, options = {}) {
     if (typeof window === 'undefined') return;
     try {
       localStorage.setItem(this.storageKey, JSON.stringify(this.data));
@@ -43,18 +43,18 @@ class DataManager {
         router.refresh();
       }
       // Schedule sync to server (debounced) so all devices see the same data
-      this._scheduleServerSync();
+      this._scheduleServerSync(300, options);
     } catch (error) {
       // suppressed console output
     }
   }
 
-  _scheduleServerSync(delay = 300) {
+  _scheduleServerSync(delay = 300, options = {}) {
     try {
       if (this._syncTimer) clearTimeout(this._syncTimer);
       this._syncTimer = setTimeout(() => {
         this._syncTimer = null;
-        this.mergeAndSave?.();
+        this.mergeAndSave?.(options);
       }, delay);
     } catch (_) { /* noop */ }
   }
@@ -108,6 +108,8 @@ class DataManager {
       adminPassword: '1234',
       entryFee: 35,
       submissionsLocked: false,
+      countdownActive: false,
+      countdownTarget: '',
       matches: [],
       users: [],
       userGuesses: [],
@@ -166,6 +168,8 @@ class DataManager {
         if (typeof this.data.entryFee !== 'undefined') merged.entryFee = this.data.entryFee
         if (typeof this.data.adminPassword !== 'undefined') merged.adminPassword = this.data.adminPassword
         if (typeof this.data.submissionsLocked !== 'undefined') merged.submissionsLocked = this.data.submissionsLocked
+        if (typeof this.data.countdownActive !== 'undefined') merged.countdownActive = this.data.countdownActive
+        if (typeof this.data.countdownTarget !== 'undefined') merged.countdownTarget = this.data.countdownTarget
       }
       this.data = merged
       // שמור מקומית לפני ניסיון שרת
@@ -205,6 +209,8 @@ class DataManager {
     merged.adminPassword = server.adminPassword || local.adminPassword || '1234'
     merged.entryFee = (server.entryFee ?? local.entryFee ?? 35)
     merged.submissionsLocked = (server.submissionsLocked ?? local.submissionsLocked ?? false)
+    merged.countdownActive = (server.countdownActive ?? local.countdownActive ?? false)
+    merged.countdownTarget = (server.countdownTarget ?? local.countdownTarget ?? '')
 
     // משחקים — בסיס מהשרת, אך עדכונים מקומיים באותו match.id גוברים; כבד מחיקות שבועות
     const srvMatches = Array.isArray(server.matches) ? server.matches : []
@@ -605,7 +611,9 @@ class DataManager {
       currentWeek: this.data.currentWeek,
       adminPassword: this.data.adminPassword,
       entryFee: this.data.entryFee,
-      submissionsLocked: !!this.data.submissionsLocked
+      submissionsLocked: !!this.data.submissionsLocked,
+      countdownActive: !!this.data.countdownActive,
+      countdownTarget: this.data.countdownTarget || ''
     };
   }
 
@@ -622,7 +630,14 @@ class DataManager {
     if (Object.prototype.hasOwnProperty.call(settings, 'submissionsLocked')) {
       this.data.submissionsLocked = !!settings.submissionsLocked;
     }
-    this.saveData();
+    if (Object.prototype.hasOwnProperty.call(settings, 'countdownActive')) {
+      this.data.countdownActive = !!settings.countdownActive;
+    }
+    if (Object.prototype.hasOwnProperty.call(settings, 'countdownTarget')) {
+      this.data.countdownTarget = settings.countdownTarget;
+    }
+    // העדף הגדרות מקומיות בעת סנכרון כדי שלא ידרסו
+    this.saveData(undefined, { preferLocalSettings: true });
   }
 
   // אימות מנהל

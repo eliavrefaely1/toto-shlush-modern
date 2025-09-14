@@ -27,6 +27,9 @@ export default function AdminPage() {
   const [sortWeek, setSortWeek] = useState('score_desc'); // score_desc | score_asc | name_asc | name_desc
   const [sortAll, setSortAll] = useState('name_asc');     // name_asc | name_desc | joined_new | joined_old | hasguess_first
   const [cleanNewWeekMatches, setCleanNewWeekMatches] = useState(true);
+  const [countdownActiveLocal, setCountdownActiveLocal] = useState(false);
+  const [countdownDate, setCountdownDate] = useState('');
+  const [countdownTime, setCountdownTime] = useState('');
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -122,6 +125,18 @@ export default function AdminPage() {
       setParticipants(currentParticipants);
       setLeaderboard(currentLeaderboard);
       setPot(currentPot);
+      // init countdown controls
+      setCountdownActiveLocal(!!currentSettings.countdownActive);
+      const tgt = String(currentSettings.countdownTarget || '');
+      if (tgt) {
+        const d = tgt.includes('T') ? tgt.split('T')[0] : tgt;
+        const t = tgt.includes('T') ? tgt.split('T')[1].slice(0,5) : '';
+        setCountdownDate(d);
+        setCountdownTime(t);
+      } else {
+        setCountdownDate('');
+        setCountdownTime('');
+      }
     } catch (error) {
       // suppressed console output
     }
@@ -929,6 +944,31 @@ export default function AdminPage() {
                         <span className="font-bold text-blue-600 ml-2">₪{pot.amountPerPlayer}</span>
                       </div>
                     </div>
+                  </div>
+
+                  {/* הגדרת שעון רץ */}
+                  <div className="bg-gray-50 border rounded-lg p-4">
+                    <h3 className="font-bold text-blue-800 mb-2">שעון רץ</h3>
+                    <div className="flex items-center gap-2 mb-3">
+                      <input id="cdActive" type="checkbox" checked={countdownActiveLocal} onChange={(e)=>{setCountdownActiveLocal(e.target.checked);}} />
+                      <label htmlFor="cdActive" className="text-sm text-gray-700">הפעל שעון רץ</label>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <input type="date" value={countdownDate} onChange={(e)=>{setCountdownDate(e.target.value);}} className="input w-40" />
+                      <input type="time" value={countdownTime} onChange={(e)=>{setCountdownTime(e.target.value);}} className="input w-32" />
+                      <button onClick={async ()=>{
+                        const target = (countdownDate && countdownTime) ? `${countdownDate}T${countdownTime}` : '';
+                        if (countdownActiveLocal && !target) { showToast('יש להזין תאריך ושעה ליעד', 'error'); return; }
+                        dataManager.updateSettings({ countdownActive: !!(countdownActiveLocal && target), countdownTarget: target });
+                        await (dataManager.mergeAndSave ? dataManager.mergeAndSave({ headers: getAdminHeaders(), preferLocalSettings: true }) : Promise.resolve());
+                        await dataManager.syncFromServer();
+                        loadAdminData();
+                        showToast('הגדרות שעון נשמרו');
+                      }} className="btn btn-secondary">שמור</button>
+                    </div>
+                    {countdownActiveLocal && countdownDate && countdownTime && (
+                      <div className="text-sm text-gray-600 mt-2">יעד: {countdownDate} {countdownTime}</div>
+                    )}
                   </div>
                 </div>
               </div>
