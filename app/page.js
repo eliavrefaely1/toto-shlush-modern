@@ -3,13 +3,14 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Trophy, Users, Star, Target, Gift, RefreshCw } from 'lucide-react'
+import { Trophy, Users, Star, Target, Gift, RefreshCw, Calendar, CheckCircle } from 'lucide-react'
 import dataManager from './lib/data.js'
 
 export default function Home() {
   const router = useRouter()
   const [pot, setPot] = useState({ totalAmount: 0, numOfPlayers: 0 })
   const [leaderboard, setLeaderboard] = useState([])
+  const [matches, setMatches] = useState([])
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [countdown, setCountdown] = useState({active:false, target:'', d:0,h:0,m:0,s:0})
   const topScore = leaderboard.length ? leaderboard[0].score : null
@@ -37,6 +38,9 @@ export default function Home() {
       } catch (_) {
         setLeaderboard(dataManager.getLeaderboard())
       }
+      // טען משחקי השבוע הנוכחי
+      const currentMatches = dataManager.getMatches()
+      setMatches(currentMatches)
       setPot(currentPot)
       const s = dataManager.getSettings()
       if (s.countdownActive && s.countdownTarget) {
@@ -75,6 +79,9 @@ export default function Home() {
       } catch (_) {
         setLeaderboard(dataManager.getLeaderboard())
       }
+      // רענן גם משחקים
+      const currentMatches = dataManager.getMatches()
+      setMatches(currentMatches)
     } finally {
       // ריענון מלא כמו F5
       if (typeof window !== 'undefined') {
@@ -127,28 +134,91 @@ export default function Home() {
     return ()=>clearInterval(iv)
   }, [countdown.active, countdown.target])
 
+  // פונקציה למיון משחקים לפי ימים
+  const getMatchesByDay = () => {
+    if (!matches || matches.length === 0) return {}
+    
+    const matchesByDay = {}
+    const dayOrder = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']
+    
+    matches.forEach(match => {
+      let dayName = 'לא מוגדר'
+      let dayIndex = 999 // ימים לא מוגדרים יופיעו בסוף
+      
+      if (match.date) {
+        try {
+          const date = new Date(match.date)
+          const dayNames = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']
+          dayName = dayNames[date.getDay()]
+          dayIndex = date.getDay()
+        } catch (e) {
+          // אם התאריך לא תקין, נשאיר "לא מוגדר"
+        }
+      }
+      
+      if (!matchesByDay[dayName]) {
+        matchesByDay[dayName] = { matches: [], dayIndex }
+      }
+      
+      matchesByDay[dayName].matches.push(match)
+    })
+    
+    // מיון המשחקים בכל יום לפי תאריך ושעה (הכי מוקדם ראשון)
+    Object.keys(matchesByDay).forEach(day => {
+      matchesByDay[day].matches.sort((a, b) => {
+        // קודם לפי תאריך
+        const dateA = a.date || '1900-01-01'
+        const dateB = b.date || '1900-01-01'
+        const dateCompare = dateA.localeCompare(dateB)
+        if (dateCompare !== 0) return dateCompare
+        
+        // אם התאריך זהה, מיון לפי שעה
+        const timeA = a.time || '00:00'
+        const timeB = b.time || '00:00'
+        return timeA.localeCompare(timeB)
+      })
+    })
+    
+    // מיון הימים לפי התאריך האמיתי (הכי מוקדם ראשון)
+    const sortedDays = Object.keys(matchesByDay).sort((a, b) => {
+      // מיון לפי התאריך של המשחק הכי מוקדם בכל יום
+      const earliestA = matchesByDay[a].matches[0]
+      const earliestB = matchesByDay[b].matches[0]
+      
+      if (earliestA && earliestB) {
+        const dateA = earliestA.date || '1900-01-01'
+        const dateB = earliestB.date || '1900-01-01'
+        const dateCompare = dateA.localeCompare(dateB)
+        if (dateCompare !== 0) return dateCompare
+        
+        // אם אותו תאריך, מיון לפי השעה של המשחק הכי מוקדם
+        const timeA = earliestA.time || '00:00'
+        const timeB = earliestB.time || '00:00'
+        return timeA.localeCompare(timeB)
+      }
+      
+      // אם אין תאריכים, מיון לפי אינדקס היום
+      return matchesByDay[a].dayIndex - matchesByDay[b].dayIndex
+    })
+    
+    // החזר אובייקט ממוין
+    const sortedMatchesByDay = {}
+    sortedDays.forEach(day => {
+      sortedMatchesByDay[day] = matchesByDay[day].matches
+    })
+    
+    return sortedMatchesByDay
+  }
+
+  const matchesByDay = getMatchesByDay()
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100" dir="rtl">
       <div className="relative z-10">
-        {/* פס קופה קטן בין הניווט לכותרת */}
-        <div className="max-w-6xl mx-auto px-0 mt-3">
-          <div className="bg-white rounded-none border-0 shadow-none py-3 px-4 text-sm flex items-center justify-between" dir="rtl">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
-                <Gift className="w-4 h-4 text-white" />
-              </div>
-              <span className="text-blue-800 font-bold">הקופה השבועית</span>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="font-extrabold text-blue-900">₪{pot.totalAmount.toLocaleString()}</span>
-              <span className="text-xs text-gray-600">{pot.numOfPlayers} משתתפים × ₪{pot.amountPerPlayer}</span>
-            </div>
-          </div>
-        </div>
         {/* כותרת עליונה */}
         <header className="bg-white/80 backdrop-blur border-b border-gray-200 shadow-md rounded-lg mb-6">
           <div className="max-w-6xl mx-auto px-4 py-6">
-            <div className="flex items-center justify-between" >
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className="w-14 h-14 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg">
                   <Trophy className="w-7 h-7 text-white" />
@@ -240,6 +310,7 @@ export default function Home() {
                     </div>
                     )})}
                 </div>
+                
                 {leaderboard.length > 5 && (
                   <div className="text-center mt-4">
                     <Link href="/leaderboard" className="btn btn-secondary">
@@ -250,8 +321,109 @@ export default function Home() {
               </div>
             </div>
           )}
+        {/* משחקי השבוע */}
+          {matches.length > 0 ? (
+            <div className="card">
+              <div className="card-header">
+                <h3 className="text-xl font-bold text-blue-800 flex items-center gap-2">
+                  <Calendar className="w-6 h-6" />
+                  משחקי השבוע
+                </h3>
+              </div>
+              <div className="card-content">
+                <div className="space-y-4">
+                  {Object.keys(matchesByDay).length > 0 ? (
+                    Object.entries(matchesByDay).map(([dayName, dayMatches]) => (
+                      <div key={dayName} className="space-y-2">
+                        <h4 className="text-lg font-bold text-gray-800 border-b border-gray-200 pb-1">
+                          יום {dayName} ({dayMatches.length} משחקים):
+                        </h4>
+                        <div className="space-y-2">
+                          {dayMatches.map((match, index) => (
+                            <div key={match.id || index} className={`flex items-center justify-between p-3 rounded-lg ${
+                              match.result ? 'bg-green-50 border border-green-200' : 'bg-gray-50'
+                            }`}>
+                              <div className="flex-1">
+                                <div className="font-medium text-gray-800 flex items-center gap-2">
+                                  {match.result && <CheckCircle className="w-4 h-4 text-green-500" />}
+                                  {match.homeTeam} vs {match.awayTeam}
+                                </div>
+                                {match.result && (
+                                  <div className="text-sm text-green-600 font-bold flex items-center gap-1">
+                                    <CheckCircle className="w-3 h-3" />
+                                    תוצאה: {match.result === '1' ? 'ניצחון בית' : match.result === 'X' ? 'תיקו' : 'ניצחון חוץ'}
+                                  </div>
+                                )}
+                                {!match.result && (
+                                  <div className="text-sm text-gray-500">
+                                    עדיין לא נקבעה תוצאה
+                                  </div>
+                                )}
+                              </div>
+                              <div className="text-left text-sm text-gray-600">
+                                {match.time && (
+                                  <div className="font-medium">{match.time}</div>
+                                )}
+                                {match.date && (
+                                  <div className="text-xs">
+                                    {new Date(match.date).toLocaleDateString('he-IL', { 
+                                      day: '2-digit', 
+                                      month: '2-digit', 
+                                      year: 'numeric' 
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center text-gray-500 py-4">
+                      אין משחקים מוגדרים לשבוע זה
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="card">
+              <div className="card-header">
+                <h3 className="text-xl font-bold text-blue-800 flex items-center gap-2">
+                  <Calendar className="w-6 h-6" />
+                  משחקי השבוע
+                </h3>
+              </div>
+              <div className="card-content">
+                <div className="text-center text-gray-500 py-8">
+                  <Calendar className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                  <p className="text-lg">אין משחקים מוגדרים לשבוע זה</p>
+                  <p className="text-sm mt-2">המנהל עדיין לא העלה את המשחקים</p>
+                </div>
+              </div>
+            </div>
+          )}
 
-          {/* הקופה השבועית הועברה לפס העליון הקטן */}
+        {/* קופה שבועית */}
+        <div className="card shadow-md rounded-lg">
+          <div className="card-header">
+            <h3 className="text-xl font-bold text-blue-800 flex items-center gap-2">
+              <Gift className="w-6 h-6 text-gray-600" />
+              הקופה השבועית
+            </h3>
+          </div>
+          <div className="card-content bg-white rounded-b-lg">
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center text-gray-800">
+              <div className="text-4xl font-bold mb-2">
+                ₪{pot.totalAmount.toLocaleString()}
+              </div>
+              <p className="text-lg">
+                {pot.numOfPlayers} משתתפים × ₪{pot.amountPerPlayer}
+              </p>
+            </div>
+          </div>
+        </div>
 
           {/* כפתורי פעולה */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
