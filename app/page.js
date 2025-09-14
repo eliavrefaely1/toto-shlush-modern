@@ -130,10 +130,25 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-100" dir="rtl">
       <div className="relative z-10">
+        {/* פס קופה קטן בין הניווט לכותרת */}
+        <div className="max-w-6xl mx-auto px-0 mt-3">
+          <div className="bg-white rounded-none border-0 shadow-none py-3 px-4 text-sm flex items-center justify-between" dir="rtl">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full flex items-center justify-center">
+                <Gift className="w-4 h-4 text-white" />
+              </div>
+              <span className="text-blue-800 font-bold">הקופה השבועית</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="font-extrabold text-blue-900">₪{pot.totalAmount.toLocaleString()}</span>
+              <span className="text-xs text-gray-600">{pot.numOfPlayers} משתתפים × ₪{pot.amountPerPlayer}</span>
+            </div>
+          </div>
+        </div>
         {/* כותרת עליונה */}
         <header className="bg-white/80 backdrop-blur border-b border-gray-200 shadow-md rounded-lg mb-6">
           <div className="max-w-6xl mx-auto px-4 py-6">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between" >
               <div className="flex items-center gap-4">
                 <div className="w-14 h-14 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full flex items-center justify-center shadow-lg">
                   <Trophy className="w-7 h-7 text-white" />
@@ -236,25 +251,7 @@ export default function Home() {
             </div>
           )}
 
-          {/* קופה שבועית */}
-          <div className="card shadow-md rounded-lg">
-            <div className="card-header">
-              <h3 className="text-xl font-bold text-blue-800 flex items-center gap-2">
-                <Gift className="w-6 h-6 text-gray-600" />
-                הקופה השבועית
-              </h3>
-            </div>
-            <div className="card-content bg-white rounded-b-lg">
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center text-gray-800">
-                <div className="text-4xl font-bold mb-2">
-                  ₪{pot.totalAmount.toLocaleString()}
-                </div>
-                <p className="text-lg">
-                  {pot.numOfPlayers} משתתפים × ₪{pot.amountPerPlayer}
-                </p>
-              </div>
-            </div>
-          </div>
+          {/* הקופה השבועית הועברה לפס העליון הקטן */}
 
           {/* כפתורי פעולה */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
