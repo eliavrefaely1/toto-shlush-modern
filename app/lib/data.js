@@ -160,6 +160,13 @@ class DataManager {
       const res = await fetch('/api/data', { cache: 'no-store' })
       const serverData = res.ok ? await res.json() : null
       const merged = this._mergeData(serverData || this.getDefaultData(), this.data)
+      if (options.preferLocalSettings) {
+        // כאשר פעולת אדמין משנה הגדרות – עדיף הערכים המקומיים
+        merged.currentWeek = this.data.currentWeek
+        if (typeof this.data.entryFee !== 'undefined') merged.entryFee = this.data.entryFee
+        if (typeof this.data.adminPassword !== 'undefined') merged.adminPassword = this.data.adminPassword
+        if (typeof this.data.submissionsLocked !== 'undefined') merged.submissionsLocked = this.data.submissionsLocked
+      }
       this.data = merged
       // שמור מקומית לפני ניסיון שרת
       if (typeof window !== 'undefined') {
