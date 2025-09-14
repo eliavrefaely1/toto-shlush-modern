@@ -66,6 +66,7 @@ export async function GET(request) {
           KV_REST_API_READ_ONLY_TOKEN: !!process.env.KV_REST_API_READ_ONLY_TOKEN,
           UPSTASH_REDIS_REST_URL: !!process.env.UPSTASH_REDIS_REST_URL,
           UPSTASH_REDIS_REST_TOKEN: !!process.env.UPSTASH_REDIS_REST_TOKEN,
+          ADMIN_TOKEN: !!process.env.ADMIN_TOKEN,
         },
         kvOk,
         kvHasKey,
@@ -89,6 +90,16 @@ export async function PUT(req) {
   try {
     const incoming = await req.json()
     const current = (await kv.get(KEY)) || defaultData
+    const ADMIN_TOKEN = process.env.ADMIN_TOKEN || process.env.X_ADMIN_TOKEN
+    const action = (req.headers.get('x-action') || '').toLowerCase()
+    const token = req.headers.get('x-admin-token')
+
+    // אבטחה: אם הוגדר טוקן בצד שרת — דרוש אותו בפעולות אדמין
+    if (ADMIN_TOKEN && action === 'admin') {
+      if (!token || token !== ADMIN_TOKEN) {
+        return new Response(JSON.stringify({ ok: false, error: 'Unauthorized' }), { status: 401 })
+      }
+    }
 
     // אכיפת נעילת הגשות: אם הנעילה פעילה כרגע, אל נאפשר שינוי userGuesses
     const toSave = { ...current, ...incoming }

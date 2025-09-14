@@ -14,6 +14,8 @@ export default function AdminPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [activeTab, setActiveTab] = useState('matches');
   const [isLoading, setIsLoading] = useState(false);
+  const [toast, setToast] = useState(null);
+  const [adminToken, setAdminToken] = useState('');
 
   const [settings, setSettings] = useState({ currentWeek: 1, adminPassword: '1234', entryFee: 35 });
   const [matches, setMatches] = useState([]);
@@ -31,6 +33,18 @@ export default function AdminPage() {
     }
   }, [isAuthenticated]);
 
+  // טען טוקן ניהול מהדפדפן (אם מוגדר)
+  useEffect(() => {
+    const t = localStorage.getItem('toto-admin-token') || '';
+    setAdminToken(t);
+  }, []);
+
+  const getAdminHeaders = () => ({ 'X-Action': 'admin', ...(adminToken ? { 'X-Admin-Token': adminToken } : {}) });
+  const showToast = (msg, type = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 2500);
+  };
+
   const refreshAll = async () => {
     setIsRefreshing(true);
     try {
@@ -46,13 +60,25 @@ export default function AdminPage() {
     }
   }
 
+  const resetLocalCache = async () => {
+    if (!confirm('לאפס קאש מקומי ולמשוך מהשרת?')) return;
+    try {
+      localStorage.removeItem('toto-shlush-data');
+      localStorage.removeItem('toto-current-name');
+      showToast('הקאש המקומי אופס');
+    } finally {
+      if (typeof window !== 'undefined') window.location.reload();
+    }
+  }
+
   const deleteMatch = async (matchId) => {
     if (confirm('האם אתה בטוח שברצונך למחוק את המשחק?')) {
       dataManager.deleteMatch(matchId);
-      await dataManager.mergeAndSave?.();
+      await dataManager.mergeAndSave?.({ headers: getAdminHeaders() });
       await dataManager.syncFromServer();
       const updatedMatches = dataManager.getMatches(settings.currentWeek);
       setMatches(updatedMatches);
+      showToast('משחק נמחק');
     }
   };
 
@@ -64,7 +90,7 @@ export default function AdminPage() {
       dataManager.clearAllMatches(settings.currentWeek);
       
       // שמירה וסנכרון מול השרת כדי שהמחיקה תהיה קבועה
-      await dataManager.mergeAndSave?.();
+      await dataManager.mergeAndSave?.({ headers: getAdminHeaders() });
       await dataManager.syncFromServer();
       
       // Update UI state
@@ -74,7 +100,7 @@ export default function AdminPage() {
       // Also refresh all admin data to ensure everything is in sync
       loadAdminData();
       
-      alert('כל המשחקים נמחקו בהצלחה!');
+      showToast('כל המשחקים נמחקו בהצלחה!');
     }
   };
 
@@ -173,13 +199,13 @@ export default function AdminPage() {
         });
       }
       
-      await dataManager.mergeAndSave?.();
+      await dataManager.mergeAndSave?.({ headers: getAdminHeaders() });
       await dataManager.syncFromServer();
       setMatches(dataManager.getMatches(settings.currentWeek));
-      alert(`נתונים נטענו בהצלחה! ${newMatches.length} משחקים נוצרו.`);
+      showToast(`נטענו ${newMatches.length} משחקים`);
     } catch (error) {
       // suppressed console output
-      alert('שגיאה בטעינת הנתונים. אנא ודא שהקובץ בפורמט JSON תקין.');
+      showToast('שגיאה בטעינת הנתונים.', 'error');
     }
   };
 
@@ -208,7 +234,7 @@ export default function AdminPage() {
         setLeaderboard(dataManager.getLeaderboard());
       }
       // ודא ששמירה עולה לשרת מיד כדי שכל המכשירים יראו
-      await (dataManager.mergeAndSave ? dataManager.mergeAndSave() : Promise.resolve());
+      await (dataManager.mergeAndSave ? dataManager.mergeAndSave({ headers: getAdminHeaders() }) : Promise.resolve());
     }
   };
 
@@ -223,61 +249,61 @@ export default function AdminPage() {
   const toggleLockSubmissions = async () => {
     const next = !settings.submissionsLocked;
     dataManager.updateSettings({ submissionsLocked: next });
-    await (dataManager.mergeAndSave ? dataManager.mergeAndSave() : Promise.resolve());
+    await (dataManager.mergeAndSave ? dataManager.mergeAndSave({ headers: getAdminHeaders() }) : Promise.resolve());
     await dataManager.syncFromServer();
     setSettings({ ...settings, submissionsLocked: next });
-    alert(next ? 'הגשת טפסים ננעלה.' : 'הגשת טפסים נפתחה.');
+    showToast(next ? 'הגשה ננעלה' : 'הגשה נפתחה');
   };
 
   const deleteGuessesForUserCurrentWeek = async (userIdOrName) => {
     if (confirm('למחוק את הניחוש של המשתתף לשבוע הנוכחי?')) {
       dataManager.deleteUserGuessesByUserAndWeek(userIdOrName, settings.currentWeek);
-      await (dataManager.mergeAndSave ? dataManager.mergeAndSave() : Promise.resolve());
+      await (dataManager.mergeAndSave ? dataManager.mergeAndSave({ headers: getAdminHeaders() }) : Promise.resolve());
       await dataManager.syncFromServer();
       // רענון מלא של נתוני האדמין כדי לשקף את המחיקה מיד
       dataManager.calculateScores();
       loadAdminData();
-      alert('ניחוש המשתתף לשבוע הנוכחי נמחק.');
+      showToast('ניחוש המשתתף לשבוע נמחק');
     }
   };
 
   const clearAllGuessesForCurrentWeek = async () => {
     if (confirm('האם אתה בטוח שברצונך למחוק את כל הניחושים לשבוע הנוכחי?')) {
       dataManager.clearAllGuesses(settings.currentWeek);
-      await (dataManager.mergeAndSave ? dataManager.mergeAndSave() : Promise.resolve());
+      await (dataManager.mergeAndSave ? dataManager.mergeAndSave({ headers: getAdminHeaders() }) : Promise.resolve());
       await dataManager.syncFromServer();
       dataManager.calculateScores();
       loadAdminData();
-      alert('כל הניחושים לשבוע הנוכחי נמחקו.');
+      showToast('כל ניחושי השבוע נמחקו');
     }
   };
 
   const deleteGuessById = async (guessId) => {
     if (confirm('למחוק את הניחוש לשבוע הנוכחי?')) {
       dataManager.deleteUserGuess(guessId);
-      await (dataManager.mergeAndSave ? dataManager.mergeAndSave() : Promise.resolve());
+      await (dataManager.mergeAndSave ? dataManager.mergeAndSave({ headers: getAdminHeaders() }) : Promise.resolve());
       await dataManager.syncFromServer();
       dataManager.calculateScores();
       loadAdminData();
-      alert('הניחוש נמחק.');
+      showToast('הניחוש נמחק');
     }
   };
 
   const deleteUserCompletely = async (userIdOrName) => {
     if (confirm('למחוק משתמש לחלוטין כולל כל הניחושים? פעולה זו בלתי הפיכה.')) {
       const res = dataManager.deleteUser(userIdOrName);
-      await (dataManager.mergeAndSave ? dataManager.mergeAndSave() : Promise.resolve());
+      await (dataManager.mergeAndSave ? dataManager.mergeAndSave({ headers: getAdminHeaders() }) : Promise.resolve());
       await dataManager.syncFromServer();
       dataManager.calculateScores();
       loadAdminData();
-      alert(`נמחקו ${res.usersRemoved} משתמש/ים ו-${res.guessesRemoved} ניחושים.`);
+      showToast(`נמחקו ${res.usersRemoved} משתמש/ים ו-${res.guessesRemoved} ניחושים.`);
     }
   };
 
   const createDefaultMatches = () => {
     const newMatches = dataManager.createDefaultMatches(settings.currentWeek);
     setMatches(newMatches);
-    alert(`${newMatches.length} משחקים נוצרו בהצלחה!`);
+    showToast(`${newMatches.length} משחקים נוצרו`);
   };
 
   if (!isAuthenticated) {
@@ -288,6 +314,11 @@ export default function AdminPage() {
             <ArrowLeft className="w-4 h-4" /> חזרה לדף הבית
           </button>
         </div>
+        {toast && (
+          <div className={`fixed top-4 right-4 z-50 px-4 py-2 rounded text-white shadow ${toast.type==='success'?'bg-green-600':'bg-red-600'}`}>
+            {toast.msg}
+          </div>
+        )}
         <div className="card max-w-md mx-auto">
           <div className="card-content">
             <div className="text-center mb-6">
@@ -318,6 +349,17 @@ export default function AdminPage() {
                   </button>
                 </div>
               </div>
+              <div>
+                <label className="block text-sm font-medium text-blue-700 mb-2">Admin API Token (רשות)</label>
+                <input
+                  type="text"
+                  value={adminToken}
+                  onChange={(e) => setAdminToken(e.target.value)}
+                  placeholder="X-Admin-Token"
+                  className="input"
+                />
+                <button type="button" onClick={() => { localStorage.setItem('toto-admin-token', adminToken); showToast('Token נשמר'); }} className="btn btn-secondary mt-2">שמור Token</button>
+              </div>
               <button type="submit" className="btn bg-blue-600 hover:bg-blue-700 text-white w-full py-3 text-lg font-bold">
                 <Shield className="w-5 h-5 ml-2" /> כניסה
               </button>
@@ -343,6 +385,11 @@ export default function AdminPage() {
   return (
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100" dir="rtl">
       <div className="max-w-6xl mx-auto px-4 py-8">
+        {toast && (
+          <div className={`fixed top-4 right-4 z-50 px-4 py-2 rounded text-white shadow ${toast.type==='success'?'bg-green-600':'bg-red-600'}`}>
+            {toast.msg}
+          </div>
+        )}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-3 mb-4">
             <Shield className="w-8 h-8 text-blue-600" />
@@ -357,6 +404,7 @@ export default function AdminPage() {
           <button onClick={refreshAll} disabled={isRefreshing} className="btn btn-secondary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
             <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} /> {isRefreshing ? 'מרענן...' : 'רענן נתונים'}
           </button>
+          <button onClick={resetLocalCache} className="btn btn-danger flex items-center gap-2">אפס קאש מקומי</button>
         </div>
         <div className="card mb-6">
           <div className="card-content p-0">
@@ -531,7 +579,7 @@ export default function AdminPage() {
                         onClick={() => {
                           dataManager.calculateScores();
                           setLeaderboard(dataManager.getLeaderboard());
-                          alert('ניקוד חושב בהצלחה!');
+                          showToast('ניקוד חושב בהצלחה!');
                         }}
                         className="btn btn-primary mt-2"
                       >

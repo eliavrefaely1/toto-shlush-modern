@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Trophy, Users, Settings, Star, Target, Gift, RefreshCw } from 'lucide-react'
+import { Trophy, Users, Star, Target, Gift, RefreshCw } from 'lucide-react'
 import dataManager from './lib/data.js'
 
 export default function Home() {
@@ -27,13 +27,7 @@ export default function Home() {
     return () => document.removeEventListener('visibilitychange', onVis)
   }, [])
 
-  const getScoreMessage = (score) => {
-    if (score >= 16) return "טוטו שלוש הגעת – את הקופה כמעט לקחת! 🎯"
-    if (score >= 12) return "מעולה! אתה בדרך הנכונה! 🚀"
-    if (score >= 8) return "לא רע בכלל! עוד קצת ואתה שם! 💪"
-    if (score >= 4) return "יש לך פוטנציאל! תמשיך לנסות! 🎯"
-    return "יצאת עגל – 3 ניחושים השבוע? 🐄"
-  }
+  // (שמור להמשך אם תרצה הודעות דירוג קצרות)
 
   const refreshData = async () => {
     setIsRefreshing(true)
@@ -84,7 +78,7 @@ export default function Home() {
               <div className="card-header">
                 <h3 className="text-xl font-bold text-blue-800 flex items-center gap-2">
                   <Users className="w-6 h-6" />
-                  טבלת המחזור
+                  מובילי המחזור
                 </h3>
               </div>
               <div className="card-content">

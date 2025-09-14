@@ -4,6 +4,7 @@ class DataManager {
     this.storageKey = 'toto-shlush-data';
     this.data = this.loadData();
     this.normalizeData();
+    this._syncTimer = null;
   }
 
   generateId() {
@@ -41,13 +42,21 @@ class DataManager {
       if (router) {
         router.refresh();
       }
-      // Push to server so all devices see the same data
-      // Fire-and-forget; merge with server to avoid overwriting
-      // No await to keep UI responsive
-      this.mergeAndSave?.();
+      // Schedule sync to server (debounced) so all devices see the same data
+      this._scheduleServerSync();
     } catch (error) {
       // suppressed console output
     }
+  }
+
+  _scheduleServerSync(delay = 300) {
+    try {
+      if (this._syncTimer) clearTimeout(this._syncTimer);
+      this._syncTimer = setTimeout(() => {
+        this._syncTimer = null;
+        this.mergeAndSave?.();
+      }, delay);
+    } catch (_) { /* noop */ }
   }
 
   // תיקון נתונים ישנים/חסרים
@@ -124,13 +133,19 @@ class DataManager {
           localStorage.setItem(this.storageKey, JSON.stringify(this.data))
         }
       }
-    } catch (_) {
+    } catch (err) {
       // offline/אין API — השאר את הנתונים המקומיים
+      if (typeof window !== 'undefined') {
+        const u = new URL(window.location.href);
+        if (u.searchParams.get('diag') === '1') {
+          console.error('[syncFromServer] failed', err);
+        }
+      }
     }
   }
 
   // מיזוג נתונים מקומי עם נתוני השרת ושמירה ל‑KV
-  async mergeAndSave() {
+  async mergeAndSave(options = {}) {
     try {
       const res = await fetch('/api/data', { cache: 'no-store' })
       const serverData = res.ok ? await res.json() : null
@@ -140,13 +155,28 @@ class DataManager {
       if (typeof window !== 'undefined') {
         localStorage.setItem(this.storageKey, JSON.stringify(merged))
       }
-      await fetch('/api/data', {
+      const putRes = await fetch('/api/data', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
         body: JSON.stringify(merged)
       })
-    } catch (_) {
+      if (putRes && putRes.ok) {
+        // לאחר שהשרת עדכן, נקה דגלי מחיקה מקומיים
+        this.data.deletedWeeks = []
+        this.data.deletedGuessKeys = []
+        this.data.deletedUsers = []
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(this.storageKey, JSON.stringify(this.data))
+        }
+      }
+    } catch (err) {
       // offline/אין KV — יתעדכן בפעם הבאה
+      if (typeof window !== 'undefined') {
+        const u = new URL(window.location.href);
+        if (u.searchParams.get('diag') === '1') {
+          console.error('[mergeAndSave] failed', err);
+        }
+      }
     }
   }
 
@@ -189,14 +219,16 @@ class DataManager {
       const srvList = srvByWeek.get(w) || []
       const locList = locByWeek.get(w) || []
 
-      // מפות לפי מזהה
+      // מפות לפי מזהה עם הכרעה לפי updatedAt/createdAt
       const byId = new Map(srvList.map(m => [m.id, m]))
-      // עדכן/הוסף פריטים מקומיים
       locList.forEach(m => {
-        if (m && m.id) {
-          const prev = byId.get(m.id)
-          // מקומי גובר (כולל תוצאות שהתעדכנו)
-          byId.set(m.id, prev ? { ...prev, ...m } : m)
+        if (!m || !m.id) return
+        const prev = byId.get(m.id)
+        if (!prev) { byId.set(m.id, m); return }
+        const tPrev = new Date(prev.updatedAt || prev.createdAt || 0).getTime()
+        const tNew = new Date(m.updatedAt || m.createdAt || 0).getTime()
+        if (tNew >= tPrev) {
+          byId.set(m.id, { ...prev, ...m })
         }
       })
       // סדר: שמור על סדר השרת, הוסף מקומיים חדשים בסוף לפי הסדר המקומי
@@ -272,6 +304,8 @@ class DataManager {
       date: match.date || '',
       result: match.result || '',
       category: 'טוטו 16',
+      createdAt: match.createdAt || new Date().toISOString(),
+      updatedAt: match.updatedAt || new Date().toISOString(),
       ...match
     };
     this.data.matches.push(newMatch);
@@ -282,7 +316,7 @@ class DataManager {
   updateMatch(matchId, updates) {
     const matchIndex = this.data.matches.findIndex(m => m.id === matchId);
     if (matchIndex !== -1) {
-      this.data.matches[matchIndex] = { ...this.data.matches[matchIndex], ...updates };
+      this.data.matches[matchIndex] = { ...this.data.matches[matchIndex], ...updates, updatedAt: new Date().toISOString() };
       this.saveData();
       return this.data.matches[matchIndex];
     }

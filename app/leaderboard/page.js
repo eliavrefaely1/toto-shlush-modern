@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Trophy, Medal, Star, Target, ArrowLeft, Crown, Award, RefreshCw } from 'lucide-react'
+import { Trophy, Medal, Star, Target, ArrowLeft, Crown, Award, RefreshCw, Users } from 'lucide-react'
 import dataManager from '../lib/data.js'
 
 const Leaderboard = () => {
@@ -394,109 +394,79 @@ export default function LeaderboardPage() {
             </div>
           </div>
         ) : (
-          <div className="space-y-4">
-            {leaderboard.map((entry, index) => (
-              <div
-                key={entry.id}
-                className={`card transition-all duration-300 hover:shadow-xl ${index < 3 ? 'ring-2 ring-blue-300' : ''}`}
-              >
-                <div className="card-content">
-                  <div className="flex items-center justify-between">
-                    {/* מיקום ושם */}
-                    <div className="flex items-center gap-4">
-                      <div className={`w-16 h-16 rounded-full flex items-center justify-center text-white font-bold text-2xl ${getRankColor(index)}`}>
-                        {index + 1}
+          <div className="card">
+            <div className="card-header">
+              <h3 className="text-xl font-bold text-blue-800 flex items-center gap-2">
+                <Users className="w-6 h-6" />
+                טבלת המחזור
+              </h3>
+            </div>
+            <div className="card-content">
+              <div className="space-y-3">
+                {leaderboard.map((entry, index) => (
+                  <div key={entry.id}>
+                    <div className="flex items-center justify-between p-2 bg-gray-50 rounded-md">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-white ${
+                          index === 0 ? 'bg-blue-600' :
+                          index === 1 ? 'bg-blue-500' :
+                          index === 2 ? 'bg-blue-400' :
+                          'bg-blue-300'
+                        }`}>
+                          {index + 1}
+                        </div>
+                        <div>
+                          <div className="font-bold text-sm">{entry.user?.name || entry.name}</div>
+                          <div className="text-xs text-gray-500">{entry.user?.phone || entry.phone}</div>
+                        </div>
                       </div>
-                      
                       <div className="flex items-center gap-3">
-                        {getRankIcon(index)}
-                        <div>
-                          <div className="text-2xl font-bold text-gray-800">
-                            {entry.user?.name || entry.name}
-                          </div>
-                          <div className="text-gray-500">
-                            {entry.user?.phone || entry.phone}
-                          </div>
+                        <div className="text-right">
+                          <div className="text-lg font-bold text-blue-600">{entry.score}</div>
+                          <div className="text-xs text-gray-500">נקודות</div>
                         </div>
+                        <button
+                          className="btn btn-secondary text-sm"
+                          onClick={() => toggleExpanded(entry.id)}
+                        >
+                          {expanded[entry.id] ? 'הסתר ניחושים' : 'הצג ניחושים'}
+                        </button>
                       </div>
                     </div>
-
-                    {/* ניקוד ופרטים */}
-                    <div className="text-left">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="text-4xl">{getScoreEmoji(entry.score)}</span>
-                        <div>
-                          <div className="text-3xl font-bold text-blue-600">
-                            {entry.score}
-                          </div>
-                          <div className="text-sm text-gray-500">נקודות</div>
-                        </div>
-                      </div>
-                      
-                      <div className="text-sm text-gray-600 max-w-xs">
-                        {getScoreMessage(entry.score)}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* סרגל התקדמות */}
-                  <div className="mt-4">
-                    <div className="flex items-center justify-between text-sm text-gray-600 mb-1">
-                      <span>התקדמות</span>
-                      <span>{entry.score} / 16</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-3">
-                      <div
-                        className="bg-gradient-to-r from-blue-400 to-blue-500 h-3 rounded-full transition-all duration-500"
-                        style={{ width: `${(entry.score / 16) * 100}%` }}
-                      ></div>
-                    </div>
-                  </div>
-
-                  {/* כפתור תצוגת ניחושים */}
-                  <div className="mt-4 text-left">
-                    <button
-                      className="btn btn-secondary text-sm"
-                      onClick={() => toggleExpanded(entry.id)}
-                    >
-                      {expanded[entry.id] ? 'הסתר ניחושים' : 'הצג ניחושים'}
-                    </button>
-                  </div>
-
-                  {/* פירוט ניחושים לכל משחק */}
-                  {expanded[entry.id] && (
-                    <div className="mt-4 bg-gray-50 rounded-lg p-3">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                        {(matchesForWeek || []).map((m, i) => {
-                          const guess = entry.guesses?.[i] || ''
-                          const hasResult = !!m.result
-                          const correct = hasResult && !!guess && m.result === guess
-                          const wrong = hasResult && !!guess && m.result !== guess
-                          const boxClasses = `p-2 rounded border ${
-                            correct ? 'bg-green-50 border-green-200' :
-                            wrong ? 'bg-red-50 border-red-200' :
-                            'bg-white border-gray-200'
-                          }`
-                          const guessColor = correct ? 'text-green-700' : (wrong ? 'text-red-700' : 'text-gray-800')
-                          return (
-                            <div key={`${entry.id}_${i}`} className={boxClasses}>
-                              <div className="text-xs text-gray-500 mb-1">משחק {i + 1}</div>
-                              <div className="text-sm font-medium text-gray-800">{m.homeTeam} vs {m.awayTeam}</div>
-                              <div className="text-sm mt-1">
-                                ניחוש: <span className={`font-bold ${guessColor}`}>{guess || '?'}</span>
-                                {m.result ? (
-                                  <span className="text-gray-500"> · תוצאה: <span className="font-bold">{m.result}</span></span>
-                                ) : null}
+                    {expanded[entry.id] && (
+                      <div className="mt-2 bg-gray-50 rounded-lg p-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          {(matchesForWeek || []).map((m, i) => {
+                            const guess = entry.guesses?.[i] || ''
+                            const hasResult = !!m.result
+                            const correct = hasResult && !!guess && m.result === guess
+                            const wrong = hasResult && !!guess && m.result !== guess
+                            const boxClasses = `p-2 rounded border ${
+                              correct ? 'bg-green-50 border-green-200' :
+                              wrong ? 'bg-red-50 border-red-200' :
+                              'bg-white border-gray-200'
+                            }`
+                            const guessColor = correct ? 'text-green-700' : (wrong ? 'text-red-700' : 'text-gray-800')
+                            return (
+                              <div key={`${entry.id}_${i}`} className={boxClasses}>
+                                <div className="text-xs text-gray-500 mb-1">משחק {i + 1}</div>
+                                <div className="text-sm font-medium text-gray-800">{m.homeTeam} vs {m.awayTeam}</div>
+                                <div className="text-sm mt-1">
+                                  ניחוש: <span className={`font-bold ${guessColor}`}>{guess || '?'}</span>
+                                  {m.result ? (
+                                    <span className="text-gray-500"> · תוצאה: <span className="font-bold">{m.result}</span></span>
+                                  ) : null}
+                                </div>
                               </div>
-                            </div>
-                          )
-                        })}
+                            )
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
+                ))}
               </div>
-            ))}
+            </div>
           </div>
         )}
 
