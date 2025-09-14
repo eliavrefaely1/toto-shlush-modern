@@ -193,7 +193,7 @@ export default function AdminPage() {
     setMatches((prevMatches) => prevMatches.map((match) => (match.id === matchId ? { ...match, result } : match)));
   };
 
-  const updateMatch = (matchId, field, value) => {
+  const updateMatch = async (matchId, field, value) => {
     const updatedMatch = dataManager.updateMatch(matchId, { [field]: value });
     if (updatedMatch) {
       setMatches((prev) => prev.map((m) => (m.id === matchId ? updatedMatch : m)));
@@ -201,6 +201,8 @@ export default function AdminPage() {
         dataManager.calculateScores();
         setLeaderboard(dataManager.getLeaderboard());
       }
+      // ודא ששמירה עולה לשרת מיד כדי שכל המכשירים יראו
+      await (dataManager.mergeAndSave ? dataManager.mergeAndSave() : Promise.resolve());
     }
   };
 

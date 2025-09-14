@@ -134,6 +134,7 @@ class DataManager {
       const res = await fetch('/api/data', { cache: 'no-store' })
       const serverData = res.ok ? await res.json() : null
       const merged = this._mergeData(serverData || this.getDefaultData(), this.data)
+      this.data = merged
       // שמור מקומית לפני ניסיון שרת
       if (typeof window !== 'undefined') {
         localStorage.setItem(this.storageKey, JSON.stringify(merged))
@@ -157,28 +158,55 @@ class DataManager {
     merged.entryFee = (server.entryFee ?? local.entryFee ?? 35)
     merged.submissionsLocked = (server.submissionsLocked ?? local.submissionsLocked ?? false)
 
-    // משחקים — שרת הוא מקור אמת; כבד מחיקות מקומיות והוסף שבועות שחסרים בשרת
+    // משחקים — בסיס מהשרת, אך עדכונים מקומיים באותו match.id גוברים; כבד מחיקות שבועות
     const srvMatches = Array.isArray(server.matches) ? server.matches : []
     const locMatches = Array.isArray(local.matches) ? local.matches : []
     const deletedWeeks = (local.deletedWeeks || []).map(Number)
-    const byWeek = new Map()
-    // התחל בשרת
-    srvMatches.forEach(m => {
-      const w = Number(m.week)
-      if (!byWeek.has(w)) byWeek.set(w, [])
-      byWeek.get(w).push(m)
-    })
-    // מחיקות מקומיות גוברות (למחיקת שבועות שלמים שערך המשתמש)
-    deletedWeeks.forEach(w => byWeek.set(Number(w), []))
-    // הוסף שבועות מקומיים שלא קיימים בשרת או ריקים בו
-    const locWeeks = new Set(locMatches.map(m => Number(m.week)))
-    locWeeks.forEach(w => {
-      const list = byWeek.get(Number(w)) || []
-      if (list.length === 0) {
-        byWeek.set(Number(w), locMatches.filter(m => Number(m.week) === Number(w)))
+
+    // קבץ לפי שבוע
+    const groupByWeek = (arr) => {
+      const map = new Map()
+      arr.forEach(m => {
+        if (!m) return
+        const w = Number(m.week)
+        if (!map.has(w)) map.set(w, [])
+        map.get(w).push(m)
+      })
+      return map
+    }
+
+    const srvByWeek = groupByWeek(srvMatches)
+    const locByWeek = groupByWeek(locMatches)
+
+    const allWeeks = new Set([...srvByWeek.keys(), ...locByWeek.keys()])
+    const mergedMatches = []
+
+    allWeeks.forEach(w => {
+      if (deletedWeeks.includes(Number(w))) {
+        return // מחיקת שבוע שלם
       }
+      const srvList = srvByWeek.get(w) || []
+      const locList = locByWeek.get(w) || []
+
+      // מפות לפי מזהה
+      const byId = new Map(srvList.map(m => [m.id, m]))
+      // עדכן/הוסף פריטים מקומיים
+      locList.forEach(m => {
+        if (m && m.id) {
+          const prev = byId.get(m.id)
+          // מקומי גובר (כולל תוצאות שהתעדכנו)
+          byId.set(m.id, prev ? { ...prev, ...m } : m)
+        }
+      })
+      // סדר: שמור על סדר השרת, הוסף מקומיים חדשים בסוף לפי הסדר המקומי
+      const idsSeen = new Set()
+      const list = []
+      srvList.forEach(m => { const mm = byId.get(m.id) || m; list.push(mm); idsSeen.add(mm.id) })
+      locList.forEach(m => { if (m && m.id && !idsSeen.has(m.id)) list.push(m) })
+      mergedMatches.push(...list)
     })
-    merged.matches = Array.from(byWeek.values()).flat()
+
+    merged.matches = mergedMatches
 
     // משתמשים — מאחדים לפי name (מפתח יציב יותר מ-id כעת)
     const byPhone = new Map()
@@ -194,19 +222,17 @@ class DataManager {
     const gKey = g => `${(g.name||'').toLowerCase().trim()}__${g.week}`
     const deletedGuessKeys = new Set((local.deletedGuessKeys || []).map(k => String(k).toLowerCase()))
     const guessesMap = new Map()
-    ;[...(server.userGuesses || []), ...(local.userGuesses || [])].forEach(g => {
+    const allGuesses = [...(server.userGuesses || []), ...(local.userGuesses || [])]
+    allGuesses.forEach(g => {
       if (!g) return
       const key = gKey(g)
       if (deletedGuessKeys.has(key)) return
-      // העדפה לחדש יותר לפי createdAt (אם יש)
       const prev = guessesMap.get(key)
-      if (!prev) {
-        guessesMap.set(key, g)
-      } else {
-        const t1 = new Date(prev.createdAt || 0).getTime()
-        const t2 = new Date(g.createdAt || 0).getTime()
-        if (t2 > t1) guessesMap.set(key, g)
-      }
+      if (!prev) { guessesMap.set(key, g); return }
+      const tPrev = new Date(prev.updatedAt || prev.createdAt || 0).getTime()
+      const tNew = new Date(g.updatedAt || g.createdAt || 0).getTime()
+      // אם הזמן שווה, העדף מקומי (שני האחרון במערך), אחרת העדף המאוחר יותר
+      if (tNew >= tPrev) guessesMap.set(key, g)
     })
     merged.userGuesses = Array.from(guessesMap.values())
 
@@ -315,6 +341,7 @@ class DataManager {
       guesses: guess.guesses || Array(16).fill(''),
       score: 0,
       createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
       ...guess
     };
 
@@ -334,7 +361,7 @@ class DataManager {
   updateUserGuess(guessId, updates) {
     const guessIndex = this.data.userGuesses.findIndex(g => g.id === guessId);
     if (guessIndex !== -1) {
-      this.data.userGuesses[guessIndex] = { ...this.data.userGuesses[guessIndex], ...updates };
+      this.data.userGuesses[guessIndex] = { ...this.data.userGuesses[guessIndex], ...updates, updatedAt: new Date().toISOString() };
       this.saveData();
       return this.data.userGuesses[guessIndex];
     }

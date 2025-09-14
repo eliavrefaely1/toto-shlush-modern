@@ -463,13 +463,21 @@ export default function LeaderboardPage() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                         {(matchesForWeek || []).map((m, i) => {
                           const guess = entry.guesses?.[i] || ''
-                          const correct = m.result && guess && m.result === guess
+                          const hasResult = !!m.result
+                          const correct = hasResult && !!guess && m.result === guess
+                          const wrong = hasResult && !!guess && m.result !== guess
+                          const boxClasses = `p-2 rounded border ${
+                            correct ? 'bg-green-50 border-green-200' :
+                            wrong ? 'bg-red-50 border-red-200' :
+                            'bg-white border-gray-200'
+                          }`
+                          const guessColor = correct ? 'text-green-700' : (wrong ? 'text-red-700' : 'text-gray-800')
                           return (
-                            <div key={`${entry.id}_${i}`} className={`p-2 rounded border ${correct ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`}>
+                            <div key={`${entry.id}_${i}`} className={boxClasses}>
                               <div className="text-xs text-gray-500 mb-1">משחק {i + 1}</div>
                               <div className="text-sm font-medium text-gray-800">{m.homeTeam} vs {m.awayTeam}</div>
                               <div className="text-sm mt-1">
-                                ניחוש: <span className={`font-bold ${correct ? 'text-green-700' : 'text-gray-800'}`}>{guess || '?'}</span>
+                                ניחוש: <span className={`font-bold ${guessColor}`}>{guess || '?'}</span>
                                 {m.result ? (
                                   <span className="text-gray-500"> · תוצאה: <span className="font-bold">{m.result}</span></span>
                                 ) : null}
