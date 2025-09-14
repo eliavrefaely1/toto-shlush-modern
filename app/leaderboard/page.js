@@ -70,21 +70,54 @@ export default function LeaderboardPage() {
     loadData()
   }, [selectedWeek])
 
-  const loadData = () => {
-    const currentLeaderboard = dataManager.getLeaderboard(selectedWeek)
-    const currentPot = dataManager.getPot(selectedWeek)
-    const weekMatches = dataManager.getMatches(selectedWeek) || []
-    
-    setLeaderboard(currentLeaderboard)
-    setPot(currentPot)
-    setMatchesForWeek(weekMatches)
+  const loadData = async () => {
+    // משוך דירוג מהיר מהשרת + נתוני משחקים וניחושים לשבוע
+    try {
+      const w = selectedWeek
+      const [lbRes, dataRes] = await Promise.all([
+        fetch(`/api/leaderboard?week=${w}`, { cache: 'no-store' }),
+        fetch(`/api/data?week=${w}&fields=matches,guesses,settings`, { cache: 'no-store' })
+      ])
+      let lb = []
+      if (lbRes.ok) {
+        const j = await lbRes.json()
+        lb = Array.isArray(j.leaderboard) ? j.leaderboard : []
+      }
+      let matches = [], guesses = [], entryFee = dataManager.getSettings().entryFee
+      if (dataRes.ok) {
+        const d = await dataRes.json()
+        matches = Array.isArray(d.matches) ? d.matches : []
+        guesses = Array.isArray(d.userGuesses) ? d.userGuesses : []
+        if (typeof d.entryFee === 'number') entryFee = d.entryFee
+      }
 
-    // טעינת שבועות זמינים
-    const allGuesses = dataManager.data.userGuesses
-    let weeks = [...new Set(allGuesses.map(g => g.week))]
-    if (!weeks.includes(selectedWeek)) weeks.push(selectedWeek)
-    weeks = weeks.sort((a, b) => b - a)
-    setAvailableWeeks(weeks.length > 0 ? weeks : [selectedWeek || 1])
+      // העשרת הדירוג בניחושים לצורך תצוגה מורחבת
+      const byUserId = new Map(guesses.map(g => [g.userId, g]))
+      const byName = new Map(guesses.map(g => [String(g.name||'').toLowerCase().trim(), g]))
+      const enriched = lb.map(e => {
+        const g = byUserId.get(e.userId) || byName.get(String(e.name||'').toLowerCase().trim())
+        return g ? { ...e, guesses: g.guesses } : e
+      })
+
+      setLeaderboard(enriched)
+      setMatchesForWeek(matches)
+      // חישוב קופה מקומי קל
+      setPot({ totalAmount: (guesses.length * entryFee), numOfPlayers: guesses.length, amountPerPlayer: entryFee })
+
+      // טעינת שבועות זמינים
+      const allWeeks = [...new Set((dataManager.data.userGuesses || []).map(g => g.week))]
+      if (!allWeeks.includes(selectedWeek)) allWeeks.push(selectedWeek)
+      allWeeks.sort((a,b)=>b-a)
+      setAvailableWeeks(allWeeks.length > 0 ? allWeeks : [selectedWeek || 1])
+    } catch (e) {
+      // נפילה — fallback לנתונים מקומיים
+      const currentLeaderboard = dataManager.getLeaderboard(selectedWeek)
+      const currentPot = dataManager.getPot(selectedWeek)
+      const weekMatches = dataManager.getMatches(selectedWeek) || []
+      setLeaderboard(currentLeaderboard)
+      setPot(currentPot)
+      setMatchesForWeek(weekMatches)
+    }
   }
 
   const getRankIcon = (index) => {

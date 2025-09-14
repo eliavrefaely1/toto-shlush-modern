@@ -122,9 +122,19 @@ class DataManager {
   async syncFromServer() {
     // מושך מהשרת, מאחד מול מקומי, ושומר מקומי; לא מוחק נתונים אם השרת ריק
     try {
-      const res = await fetch('/api/data', { cache: 'no-store' })
+      const week = Number(this.data?.currentWeek || 1)
+      // בקשה ממוזערת לפי שבוע ושדות נחוצים
+      let res = await fetch(`/api/data?week=${encodeURIComponent(week)}&fields=settings,matches,guesses,users`, { cache: 'no-store' })
       if (!res.ok) return
-      const serverData = await res.json()
+      let serverData = await res.json()
+
+      // אם השרת מצביע על שבוע נוכחי אחר – בקשת השלמה לשבוע הנכון
+      const serverWeek = Number(serverData?.currentWeek ?? serverData?.settings?.currentWeek)
+      if (serverWeek && serverWeek !== week) {
+        const res2 = await fetch(`/api/data?week=${encodeURIComponent(serverWeek)}&fields=settings,matches,guesses,users`, { cache: 'no-store' })
+        if (res2.ok) serverData = await res2.json()
+      }
+
       if (serverData && typeof serverData === 'object') {
         // מיזוג דו-כיווני: שרת מול מקומי
         const merged = this._mergeData(serverData || this.getDefaultData(), this.data || this.getDefaultData())

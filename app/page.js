@@ -17,9 +17,20 @@ export default function Home() {
     const init = async () => {
       await dataManager.syncFromServer()
       const currentPot = dataManager.getPot()
-      const currentLeaderboard = dataManager.getLeaderboard()
+      // משוך דירוג מהיר מהשרת (קל משקל)
+      try {
+        const w = dataManager.getSettings().currentWeek || 1
+        const res = await fetch(`/api/leaderboard?week=${w}`, { cache: 'no-store' })
+        if (res.ok) {
+          const j = await res.json()
+          setLeaderboard(Array.isArray(j.leaderboard) ? j.leaderboard : [])
+        } else {
+          setLeaderboard(dataManager.getLeaderboard())
+        }
+      } catch (_) {
+        setLeaderboard(dataManager.getLeaderboard())
+      }
       setPot(currentPot)
-      setLeaderboard(currentLeaderboard)
     }
     init()
 
@@ -35,7 +46,18 @@ export default function Home() {
     try {
       await dataManager.syncFromServer()
       setPot(dataManager.getPot())
-      setLeaderboard(dataManager.getLeaderboard())
+      try {
+        const w = dataManager.getSettings().currentWeek || 1
+        const res = await fetch(`/api/leaderboard?week=${w}`, { cache: 'no-store' })
+        if (res.ok) {
+          const j = await res.json()
+          setLeaderboard(Array.isArray(j.leaderboard) ? j.leaderboard : [])
+        } else {
+          setLeaderboard(dataManager.getLeaderboard())
+        }
+      } catch (_) {
+        setLeaderboard(dataManager.getLeaderboard())
+      }
     } finally {
       // ריענון מלא כמו F5
       if (typeof window !== 'undefined') {

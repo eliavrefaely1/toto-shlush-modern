@@ -20,6 +20,11 @@ try {
 }
 
 const KEY = 'toto:data:v1'
+// Split-keys (progressive enhancement; keeps backward compatibility)
+const META_KEY = 'toto:meta:v1'
+const USERS_KEY = 'toto:users:v1'
+const MATCHES_KEY = (w) => `toto:week:${w}:matches:v1`
+const GUESSES_KEY = (w) => `toto:week:${w}:guesses:v1`
 
 const defaultData = {
   currentWeek: 1,
@@ -74,8 +79,64 @@ export async function GET(request) {
       }, { headers: { 'Cache-Control': 'no-store' } })
     }
 
-    const data = await kv.get(KEY)
-    return Response.json(data || defaultData, {
+    const raw = (await kv.get(KEY)) || defaultData
+    // Optional filtering by week and fields to reduce payload
+    const weekParam = searchParams.get('week')
+    const fieldsParam = searchParams.get('fields') || searchParams.get('only')
+    const wanted = fieldsParam ? new Set(fieldsParam.split(',').map(s => s.trim())) : null
+
+    let data = raw
+    // Shallow clone before mutating
+    if (weekParam || wanted) {
+      data = { ...raw }
+    }
+
+    if (weekParam) {
+      const w = Number(weekParam)
+      if (!Number.isNaN(w)) {
+        // Try split-keys first for faster/smaller payload
+        const [wkMatches, wkGuesses] = await Promise.all([
+          kv.get(MATCHES_KEY(w)).catch(()=>null),
+          kv.get(GUESSES_KEY(w)).catch(()=>null)
+        ])
+        if (Array.isArray(wkMatches)) {
+          data.matches = wkMatches
+        } else if (Array.isArray(raw.matches)) {
+          data.matches = raw.matches.filter(m => Number(m.week) === w)
+        } else {
+          data.matches = []
+        }
+
+        if (Array.isArray(wkGuesses)) {
+          data.userGuesses = wkGuesses
+        } else if (Array.isArray(raw.userGuesses)) {
+          data.userGuesses = raw.userGuesses.filter(g => Number(g.week) === w)
+        } else {
+          data.userGuesses = []
+        }
+      }
+    }
+
+    if (wanted) {
+      const filtered = {}
+      if (wanted.has('settings')) {
+        const meta = await kv.get(META_KEY).catch(()=>null)
+        filtered.currentWeek = meta?.currentWeek ?? raw.currentWeek
+        filtered.adminPassword = meta?.adminPassword ?? raw.adminPassword
+        filtered.entryFee = meta?.entryFee ?? raw.entryFee
+        filtered.submissionsLocked = (meta?.submissionsLocked ?? raw.submissionsLocked) ?? false
+      }
+      if (wanted.has('matches')) filtered.matches = data.matches || []
+      if (wanted.has('guesses') || wanted.has('userGuesses')) filtered.userGuesses = data.userGuesses || []
+      if (wanted.has('users')) {
+        const users = await kv.get(USERS_KEY).catch(()=>null)
+        filtered.users = Array.isArray(users) ? users : (raw.users || [])
+      }
+      if (wanted.has('pots')) filtered.pots = raw.pots || []
+      data = filtered
+    }
+
+    return Response.json(data, {
       headers: { 'Cache-Control': 'no-store' }
     })
   } catch (err) {
@@ -119,6 +180,40 @@ export async function PUT(req) {
     }
 
     await kv.set(KEY, toSave)
+
+    // Also persist split-keys for faster targeted reads
+    const metaToSave = {
+      currentWeek: toSave.currentWeek ?? defaultData.currentWeek,
+      adminPassword: toSave.adminPassword ?? defaultData.adminPassword,
+      entryFee: toSave.entryFee ?? defaultData.entryFee,
+      submissionsLocked: !!toSave.submissionsLocked,
+    }
+    try { await kv.set(META_KEY, metaToSave) } catch (_) {}
+
+    if (Array.isArray(toSave.users)) {
+      try { await kv.set(USERS_KEY, toSave.users) } catch (_) {}
+    }
+
+    const groupByWeek = (arr) => {
+      const map = new Map()
+      ;(Array.isArray(arr) ? arr : []).forEach(it => {
+        const w = Number(it?.week)
+        if (!Number.isNaN(w)) {
+          if (!map.has(w)) map.set(w, [])
+          map.get(w).push(it)
+        }
+      })
+      return map
+    }
+
+    const matchesByWeek = groupByWeek(toSave.matches)
+    for (const [w, list] of matchesByWeek.entries()) {
+      try { await kv.set(MATCHES_KEY(w), list) } catch (_) {}
+    }
+    const guessesByWeek = groupByWeek(toSave.userGuesses)
+    for (const [w, list] of guessesByWeek.entries()) {
+      try { await kv.set(GUESSES_KEY(w), list) } catch (_) {}
+    }
     return Response.json({ ok: true }, {
       headers: { 'Cache-Control': 'no-store' }
     })
