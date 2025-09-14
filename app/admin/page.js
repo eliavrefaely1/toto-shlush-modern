@@ -403,17 +403,19 @@ export default function AdminPage() {
                   </button>
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-blue-700 mb-2">Admin API Token (רשות)</label>
-                <input
-                  type="text"
-                  value={adminToken}
-                  onChange={(e) => setAdminToken(e.target.value)}
-                  placeholder="X-Admin-Token"
-                  className="input"
-                />
-                <button type="button" onClick={() => { localStorage.setItem('toto-admin-token', adminToken); showToast('Token נשמר'); }} className="btn btn-secondary mt-2">שמור Token</button>
-              </div>
+              {false && (
+                <div>
+                  <label className="block text-sm font-medium text-blue-700 mb-2">Admin API Token (רשות)</label>
+                  <input
+                    type="text"
+                    value={adminToken}
+                    onChange={(e) => setAdminToken(e.target.value)}
+                    placeholder="X-Admin-Token"
+                    className="input"
+                  />
+                  <button type="button" onClick={() => { localStorage.setItem('toto-admin-token', adminToken); showToast('Token נשמר'); }} className="btn btn-secondary mt-2">שמור Token</button>
+                </div>
+              )}
               <button type="submit" className="btn bg-blue-600 hover:bg-blue-700 text-white w-full py-3 text-lg font-bold">
                 <Shield className="w-5 h-5 ml-2" /> כניסה
               </button>
