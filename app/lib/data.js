@@ -104,7 +104,8 @@ class DataManager {
       userGuesses: [],
       pots: [],
       deletedWeeks: [],
-      deletedGuessKeys: []
+      deletedGuessKeys: [],
+      deletedUsers: []
     };
   }
 
@@ -208,19 +209,26 @@ class DataManager {
 
     merged.matches = mergedMatches
 
-    // משתמשים — מאחדים לפי name (מפתח יציב יותר מ-id כעת)
-    const byPhone = new Map()
+    // משתמשים — מאחדים לפי name; מכבדים מחיקות גם מהשרת וגם מקומי (איחוד)
+    const deletedUsers = new Set([
+      ...((server.deletedUsers || []).map(s => String(s).toLowerCase().trim())),
+      ...((local.deletedUsers || []).map(s => String(s).toLowerCase().trim()))
+    ])
+    const byName = new Map()
     ;[...(server.users || []), ...(local.users || [])].forEach(u => {
       if (!u) return
       const key = (u.name || '').toLowerCase().trim()
-      const exist = byPhone.get(key)
-      if (!exist) byPhone.set(key, u)
+      if (deletedUsers.has(key)) return
+      if (!byName.has(key)) byName.set(key, u)
     })
-    merged.users = Array.from(byPhone.values())
+    merged.users = Array.from(byName.values())
 
     // ניחושים — איחוד לפי (name, week) תוך כיבוד מחיקות
     const gKey = g => `${(g.name||'').toLowerCase().trim()}__${g.week}`
-    const deletedGuessKeys = new Set((local.deletedGuessKeys || []).map(k => String(k).toLowerCase()))
+    const deletedGuessKeys = new Set([
+      ...((server.deletedGuessKeys || []).map(k => String(k).toLowerCase())),
+      ...((local.deletedGuessKeys || []).map(k => String(k).toLowerCase()))
+    ])
     const guessesMap = new Map()
     const allGuesses = [...(server.userGuesses || []), ...(local.userGuesses || [])]
     allGuesses.forEach(g => {
@@ -239,9 +247,10 @@ class DataManager {
     // pots לא נשמר כרשימה — מחשבים דינמית; נשמר אם קיים
     merged.pots = server.pots || local.pots || []
 
-    // איפוס דגלי מחיקה לאחר שמירה
-    merged.deletedWeeks = []
-    merged.deletedGuessKeys = []
+    // שמור דגלי מחיקה כדי שיתפזרו לכל המכשירים
+    merged.deletedWeeks = Array.from(new Set([...(server.deletedWeeks || []).map(Number), ...(local.deletedWeeks || []).map(Number)]))
+    merged.deletedGuessKeys = Array.from(deletedGuessKeys)
+    merged.deletedUsers = Array.from(deletedUsers)
     return merged
   }
 
@@ -323,6 +332,61 @@ class DataManager {
 
   getUserById(userId) {
     return this.data.users.find(u => u.id === userId);
+  }
+
+  // מחיקת משתמש וכל הניחושים שלו בכל השבועות
+  deleteUser(userIdOrName) {
+    const beforeUsers = this.data.users.length;
+    let target = null;
+    let nameLower = '';
+    let idStr = '';
+    if (typeof userIdOrName === 'string') {
+      idStr = userIdOrName;
+      target = this.getUserById(userIdOrName);
+      if (!target) {
+        // נסה כשם
+        nameLower = userIdOrName.toLowerCase().trim();
+        target = (this.data.users || []).find(u => (u.name||'').toLowerCase().trim() === nameLower) || null;
+      }
+    } else if (userIdOrName && userIdOrName.id) {
+      target = this.getUserById(userIdOrName.id) || userIdOrName;
+    }
+
+    if (!target) {
+      // נסה לאתר לפי רשומת ניחוש קיימת
+      const g = (this.data.userGuesses || []).find(gg => gg.userId === idStr || (String(gg.name||'').toLowerCase().trim() === (nameLower || '').toLowerCase()))
+      if (g) {
+        nameLower = String(g.name || '').toLowerCase().trim();
+        target = { id: g.userId, name: g.name };
+      }
+    }
+
+    if (!target && !nameLower) return { usersRemoved: 0, guessesRemoved: 0 };
+
+    nameLower = nameLower || String(target.name || '').toLowerCase().trim();
+
+    // הסר את המשתמש מרשימת המשתמשים
+    this.data.users = (this.data.users || []).filter(u => u.id !== target.id && (String(u.name||'').toLowerCase().trim() !== nameLower));
+
+    // רשום מחיקה כדי שתגבר במיזוג מול השרת
+    if (nameLower) {
+      if (!Array.isArray(this.data.deletedUsers)) this.data.deletedUsers = []
+      if (!this.data.deletedUsers.includes(nameLower)) this.data.deletedUsers.push(nameLower)
+    }
+
+    // סמן ומחק את כל הניחושים של המשתמש בכל השבועות
+    (this.data.userGuesses || []).forEach(g => {
+      if (g.userId === target.id || (String(g.name||'').toLowerCase().trim() === nameLower)) {
+        const key = `${(g.name||'').toLowerCase().trim()}__${g.week}`
+        if (!this.data.deletedGuessKeys.includes(key)) this.data.deletedGuessKeys.push(key)
+      }
+    })
+    const beforeGuesses = (this.data.userGuesses || []).length;
+    this.data.userGuesses = (this.data.userGuesses || []).filter(g => !(g.userId === target.id || (String(g.name||'').toLowerCase().trim() === nameLower)));
+    const guessesRemoved = beforeGuesses - this.data.userGuesses.length;
+
+    this.saveData();
+    return { usersRemoved: beforeUsers - this.data.users.length, guessesRemoved };
   }
 
   // ניהול ניחושים

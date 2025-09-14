@@ -28,7 +28,10 @@ const defaultData = {
   matches: [],
   users: [],
   userGuesses: [],
-  pots: []
+  pots: [],
+  deletedWeeks: [],
+  deletedGuessKeys: [],
+  deletedUsers: []
 }
 
 export const POST = async () => {
@@ -89,8 +92,19 @@ export async function PUT(req) {
 
     // אכיפת נעילת הגשות: אם הנעילה פעילה כרגע, אל נאפשר שינוי userGuesses
     const toSave = { ...current, ...incoming }
+    const incomingGuesses = Array.isArray(incoming.userGuesses) ? incoming.userGuesses : (current.userGuesses || [])
+    const currentGuesses = Array.isArray(current.userGuesses) ? current.userGuesses : []
     if (current?.submissionsLocked) {
-      toSave.userGuesses = current.userGuesses || []
+      // כאשר הגשה נעולה: נאפשר עדכונים ומחיקה, אך לא הוספה של משתתפים חדשים
+      if (incomingGuesses.length > currentGuesses.length) {
+        // חסום הוספה — שמור את הנוכחי
+        toSave.userGuesses = currentGuesses
+      } else {
+        // עדכון/מחיקה מותר
+        toSave.userGuesses = incomingGuesses
+      }
+    } else {
+      toSave.userGuesses = incomingGuesses
     }
 
     await kv.set(KEY, toSave)

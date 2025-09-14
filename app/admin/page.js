@@ -263,6 +263,17 @@ export default function AdminPage() {
     }
   };
 
+  const deleteUserCompletely = async (userIdOrName) => {
+    if (confirm('למחוק משתמש לחלוטין כולל כל הניחושים? פעולה זו בלתי הפיכה.')) {
+      const res = dataManager.deleteUser(userIdOrName);
+      await (dataManager.mergeAndSave ? dataManager.mergeAndSave() : Promise.resolve());
+      await dataManager.syncFromServer();
+      dataManager.calculateScores();
+      loadAdminData();
+      alert(`נמחקו ${res.usersRemoved} משתמש/ים ו-${res.guessesRemoved} ניחושים.`);
+    }
+  };
+
   const createDefaultMatches = () => {
     const newMatches = dataManager.createDefaultMatches(settings.currentWeek);
     setMatches(newMatches);
@@ -614,9 +625,14 @@ export default function AdminPage() {
                               {leaderboard.find(l => l.userId === user.id || l.user?.name === user.name || l.name === user.name)?.score || 0}
                             </div>
                             <div className="text-sm text-gray-500">נקודות</div>
-                            <button onClick={() => deleteGuessById(guess.id)} className="btn btn-danger mt-2 flex items-center gap-2">
-                              <Trash2 className="w-4 h-4" /> מחק ניחוש לשבוע
-                            </button>
+                            <div className="flex flex-col gap-2 mt-2">
+                              <button onClick={() => deleteGuessById(guess.id)} className="btn btn-danger flex items-center gap-2">
+                                <Trash2 className="w-4 h-4" /> מחק ניחוש לשבוע
+                              </button>
+                              <button onClick={() => deleteUserCompletely(user.id)} className="btn btn-danger flex items-center gap-2">
+                                <Trash2 className="w-4 h-4" /> מחק משתמש לחלוטין
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>
