@@ -53,6 +53,7 @@ export default function LeaderboardPage() {
   const [matchesForWeek, setMatchesForWeek] = useState([])
   const [expanded, setExpanded] = useState({})
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const topScore = leaderboard.length ? leaderboard[0].score : null
 
   // אתחול פעם אחת: מושך מהשרת ומגדיר לשבוע הנוכחי
   useEffect(() => {
@@ -406,11 +407,11 @@ export default function LeaderboardPage() {
                 {leaderboard.map((entry, index) => (
                   <div key={entry.id}>
                     <div className={`flex items-center justify-between p-2 rounded-md ${
-                      index === 0 ? 'bg-green-50 border border-green-200' : 'bg-gray-50'
+                      topScore !== null && entry.score === topScore ? 'bg-green-50 border border-green-200' : 'bg-gray-50'
                     }`}>
                       <div className="flex items-center gap-2">
                         <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-white ${
-                          index === 0 ? 'bg-green-600' :
+                          (topScore !== null && entry.score === topScore) ? 'bg-green-600' :
                           index === 1 ? 'bg-blue-500' :
                           index === 2 ? 'bg-blue-400' :
                           'bg-blue-300'

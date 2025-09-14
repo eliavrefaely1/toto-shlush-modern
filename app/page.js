@@ -11,6 +11,7 @@ export default function Home() {
   const [pot, setPot] = useState({ totalAmount: 0, numOfPlayers: 0 })
   const [leaderboard, setLeaderboard] = useState([])
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const topScore = leaderboard.length ? leaderboard[0].score : null
 
   useEffect(() => {
     const init = async () => {
@@ -83,16 +84,18 @@ export default function Home() {
               </div>
               <div className="card-content">
                 <div className="space-y-3">
-                  {leaderboard.slice(0, 5).map((entry, index) => (
+                  {leaderboard.slice(0, 5).map((entry, index) => {
+                    const isTop = topScore !== null && entry.score === topScore
+                    return (
                     <div
                       key={entry.id}
                       className={`flex items-center justify-between p-2 rounded-md ${
-                        index === 0 ? 'bg-green-50 border border-green-200' : 'bg-gray-50'
+                        isTop ? 'bg-green-50 border border-green-200' : 'bg-gray-50'
                       }`}
                     >
                       <div className="flex items-center gap-2">
                         <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-white ${
-                          index === 0 ? 'bg-green-600' :
+                          isTop ? 'bg-green-600' :
                           index === 1 ? 'bg-blue-500' :
                           index === 2 ? 'bg-blue-400' :
                           'bg-blue-300'
@@ -124,7 +127,7 @@ export default function Home() {
                         </div>
                       )}
                     </div>
-                  ))}
+                    )})}
                 </div>
                 {leaderboard.length > 5 && (
                   <div className="text-center mt-4">
