@@ -10,6 +10,7 @@ export default function Home() {
   const router = useRouter()
   const [pot, setPot] = useState({ totalAmount: 0, numOfPlayers: 0 })
   const [leaderboard, setLeaderboard] = useState([])
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   useEffect(() => {
     const init = async () => {
@@ -35,9 +36,19 @@ export default function Home() {
   }
 
   const refreshData = async () => {
-    await dataManager.syncFromServer()
-    setPot(dataManager.getPot())
-    setLeaderboard(dataManager.getLeaderboard())
+    setIsRefreshing(true)
+    try {
+      await dataManager.syncFromServer()
+      setPot(dataManager.getPot())
+      setLeaderboard(dataManager.getLeaderboard())
+    } finally {
+      // ריענון מלא כמו F5
+      if (typeof window !== 'undefined') {
+        window.location.reload()
+      } else {
+        router.refresh()
+      }
+    }
   }
 
   return (
@@ -57,9 +68,9 @@ export default function Home() {
                 </div>
               </div>
               <nav className="flex gap-3">
-                <button onClick={refreshData} className="btn btn-primary flex items-center gap-2 shadow-md">
-                  <RefreshCw className="w-5 h-5" />
-                  רענן
+                <button onClick={refreshData} disabled={isRefreshing} className="btn btn-primary flex items-center gap-2 shadow-md disabled:opacity-50 disabled:cursor-not-allowed">
+                  <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                  {isRefreshing ? 'מרענן...' : 'רענן'}
                 </button>
               </nav>
             </div>

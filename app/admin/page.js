@@ -20,6 +20,7 @@ export default function AdminPage() {
   const [participants, setParticipants] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
   const [pot, setPot] = useState({ totalAmount: 0, numOfPlayers: 0 });
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -31,12 +32,17 @@ export default function AdminPage() {
   }, [isAuthenticated]);
 
   const refreshAll = async () => {
+    setIsRefreshing(true);
     try {
       await dataManager.syncFromServer();
       loadAdminData();
     } finally {
-      // Use router.refresh() instead of window.location.reload()
-      router.refresh();
+      // ריענון מלא כמו F5
+      if (typeof window !== 'undefined') {
+        window.location.reload();
+      } else {
+        router.refresh();
+      }
     }
   }
 
@@ -337,8 +343,8 @@ export default function AdminPage() {
           <button onClick={() => router.push('/')} className="btn btn-secondary flex items-center gap-2">
             <ArrowLeft className="w-4 h-4" /> חזרה לדף הבית
           </button>
-          <button onClick={refreshAll} className="btn btn-secondary flex items-center gap-2">
-            <RefreshCw className="w-4 h-4" /> רענן נתונים
+          <button onClick={refreshAll} disabled={isRefreshing} className="btn btn-secondary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} /> {isRefreshing ? 'מרענן...' : 'רענן נתונים'}
           </button>
         </div>
         <div className="card mb-6">

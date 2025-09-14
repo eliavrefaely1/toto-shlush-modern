@@ -52,6 +52,7 @@ export default function LeaderboardPage() {
   const [availableWeeks, setAvailableWeeks] = useState([1])
   const [matchesForWeek, setMatchesForWeek] = useState([])
   const [expanded, setExpanded] = useState({})
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   // אתחול פעם אחת: מושך מהשרת ומגדיר לשבוע הנוכחי
   useEffect(() => {
@@ -116,12 +117,17 @@ export default function LeaderboardPage() {
   }
 
   const refreshNow = async () => {
+    setIsRefreshing(true)
     try {
       await dataManager.syncFromServer();
       loadData();
     } finally {
-      // Use router.refresh() instead of window.location.reload()
-      router.refresh();
+      // ריענון מלא כמו F5
+      if (typeof window !== 'undefined') {
+        window.location.reload()
+      } else {
+        router.refresh()
+      }
     }
   }
 
@@ -355,9 +361,9 @@ export default function LeaderboardPage() {
                 <option key={week} value={week}>שבוע {week}</option>
               ))}
             </select>
-            <button onClick={refreshNow} className="btn btn-secondary flex items-center gap-2">
-              <RefreshCw className="w-4 h-4" />
-              רענן
+            <button onClick={refreshNow} disabled={isRefreshing} className="btn btn-secondary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              {isRefreshing ? 'מרענן...' : 'רענן'}
             </button>
             <button onClick={exportGuessesPNG} className="btn btn-primary flex items-center gap-2">
               ייצוא תמונה (PNG)
