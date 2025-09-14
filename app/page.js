@@ -351,7 +351,7 @@ export default function Home() {
                                 {match.result && (
                                   <div className="text-sm text-green-600 font-bold flex items-center gap-1">
                                     <CheckCircle className="w-3 h-3" />
-                                    תוצאה: {match.result === '1' ? 'ניצחון בית' : match.result === 'X' ? 'תיקו' : 'ניצחון חוץ'}
+                                    תוצאה: {match.result === '1' ? '1' : match.result === 'X' ? 'X' : '2'}
                                   </div>
                                 )}
                                 {!match.result && (
