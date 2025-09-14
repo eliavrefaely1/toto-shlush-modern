@@ -171,24 +171,6 @@ export default function GuessPage() {
           <p className="text-lg text-gray-600">בחר 1, X או 2 לכל משחק</p>
         </div>
 
-        {/* התקדמות */}
-        <div className="card mb-6">
-          <div className="card-content">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-sm font-medium text-gray-700">התקדמות</span>
-              <span className="text-sm font-medium text-gray-700">
-                {formData.guesses.filter(g => g !== '').length} / 16
-              </span>
-            </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div 
-                className="bg-blue-500 h-2 rounded-full transition-all duration-300"
-                style={{ width: `${getProgress()}%` }}
-              ></div>
-            </div>
-          </div>
-        </div>
-
         <form onSubmit={handleSubmit}>
           {/* פרטים אישיים */}
           <div className="card mb-6">
