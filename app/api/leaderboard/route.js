@@ -33,6 +33,13 @@ export async function GET(request) {
     const guesses = Array.isArray(wkGuesses) ? wkGuesses : (Array.isArray(raw?.userGuesses) ? raw.userGuesses.filter(g => Number(g.week) === w) : [])
     const usersArr = Array.isArray(users) ? users : (Array.isArray(raw?.users) ? raw.users : [])
     const byId = new Map(usersArr.map(u => [u.id, u]))
+    
+    // 🔍 לוגים לדיבוג
+    console.log('🔍 [Leaderboard API] Debug info:')
+    console.log('📊 Total users:', usersArr.length)
+    console.log('📊 Users with "מוטי":', usersArr.filter(u => u.name?.includes('מוטי')))
+    console.log('📊 Total guesses:', guesses.length)
+    console.log('📊 Guesses with "מוטי":', guesses.filter(g => g.name?.includes('מוטי')))
 
     // Compute scores (ensure up-to-date with latest match results)
     const results = matches.map(m => m.result || '')
@@ -42,6 +49,16 @@ export async function GET(request) {
         if (results[i] && g.guesses?.[i] === results[i]) score++
       }
       const u = byId.get(g.userId)
+      
+      // 🔍 לוגים ספציפיים למוטי
+      if (g.name?.includes('מוטי') || u?.name?.includes('מוטי')) {
+        console.log('🔍 [Leaderboard API] מוטי debug:')
+        console.log('  - Guess name:', g.name)
+        console.log('  - Guess userId:', g.userId)
+        console.log('  - User from DB:', u)
+        console.log('  - Final name will be:', u?.name || g.name)
+      }
+      
       return {
         id: g.id,
         userId: g.userId,

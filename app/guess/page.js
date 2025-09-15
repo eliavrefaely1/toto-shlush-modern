@@ -15,22 +15,11 @@ export default function GuessPage() {
   const [isLocked, setIsLocked] = useState(false)
 
   useEffect(() => {
-    // טעינת משחקים + שם מהאחסון המקומי
+    // טעינת משחקים מהשרת
     (async () => {
-      await dataManager.syncFromServer()
+      await dataManager.initialize()
       const currentMatches = dataManager.getMatches()
       setMatches(currentMatches)
-      const storedName = localStorage.getItem('toto-current-name') || ''
-      if (storedName) {
-        setFormData(prev => ({ ...prev, name: storedName }))
-        // טעינת ניחוש קיים לשבוע הנוכחי עבור אותו שם
-        const existing = (dataManager.getUserGuesses() || []).find(
-          g => (g.name || '').toLowerCase().trim() === storedName.toLowerCase().trim()
-        )
-        if (existing && Array.isArray(existing.guesses)) {
-          setFormData(prev => ({ ...prev, guesses: existing.guesses }))
-        }
-      }
       const s = dataManager.getSettings()
       setIsLocked(!!s.submissionsLocked)
     })()
@@ -55,7 +44,7 @@ export default function GuessPage() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     // בדיקת מצב נעילה מהשרת ברגע השליחה
-    await dataManager.syncFromServer()
+    await dataManager.initialize()
     const sNow = dataManager.getSettings()
     if (sNow.submissionsLocked) {
       setIsLocked(true)
@@ -81,16 +70,13 @@ export default function GuessPage() {
       // יצירת משתמש אם לא קיים
       let user = dataManager.getUsers().find(u => (u.name||'').toLowerCase().trim() === formData.name.toLowerCase().trim())
       if (!user) {
-        user = dataManager.addUser({
+        user = await dataManager.addUser({
           name: formData.name
         })
       }
-      localStorage.setItem('toto-current-name', formData.name)
 
       // שמירת הניחושים
-      dataManager.addUserGuess({ userId: user.id, name: formData.name, guesses: formData.guesses })
-      // ודא סנכרון לשרת כדי שכל המכשירים יראו אותו הדבר
-      await (dataManager.mergeAndSave ? dataManager.mergeAndSave() : Promise.resolve())
+      await dataManager.addUserGuess({ userId: user.id, name: formData.name, guesses: formData.guesses })
 
       setShowSuccess(true)
       
@@ -99,7 +85,7 @@ export default function GuessPage() {
       }, 3000)
 
     } catch (error) {
-      // suppressed console output
+      console.error('Error saving guesses:', error)
       alert('שגיאה בשמירת הניחושים. אנא נסה שוב.')
     } finally {
       setIsSubmitting(false)

@@ -17,7 +17,7 @@ export default function Home() {
 
   useEffect(() => {
     const init = async () => {
-      await dataManager.syncFromServer()
+      await dataManager.initialize()
       // משוך קופה מהשרת (קל משקל)
       let currentPot = dataManager.getPot()
       try {
@@ -33,10 +33,10 @@ export default function Home() {
           const j = await res.json()
           setLeaderboard(Array.isArray(j.leaderboard) ? j.leaderboard : [])
         } else {
-          setLeaderboard(dataManager.getLeaderboard())
+          setLeaderboard(await dataManager.getLeaderboard())
         }
       } catch (_) {
-        setLeaderboard(dataManager.getLeaderboard())
+        setLeaderboard(await dataManager.getLeaderboard())
       }
       // טען משחקי השבוע הנוכחי
       const currentMatches = dataManager.getMatches()
@@ -61,7 +61,7 @@ export default function Home() {
   const refreshData = async () => {
     setIsRefreshing(true)
     try {
-      await dataManager.syncFromServer()
+      await dataManager.initialize()
       try {
         const w = dataManager.getSettings().currentWeek || 1
         const resPot = await fetch(`/api/pot?week=${w}`, { cache: 'no-store' })
@@ -74,10 +74,10 @@ export default function Home() {
           const j = await res.json()
           setLeaderboard(Array.isArray(j.leaderboard) ? j.leaderboard : [])
         } else {
-          setLeaderboard(dataManager.getLeaderboard())
+          setLeaderboard(await dataManager.getLeaderboard())
         }
       } catch (_) {
-        setLeaderboard(dataManager.getLeaderboard())
+        setLeaderboard(await dataManager.getLeaderboard())
       }
       // רענן גם משחקים
       const currentMatches = dataManager.getMatches()
@@ -111,7 +111,7 @@ export default function Home() {
         return isNaN(dt.getTime()) ? null : dt
       } catch { return null }
     }
-    const calc = () => {
+    const calc = async () => {
       const now = new Date()
       const tgt = parseLocal(countdown.target)
       if (!tgt) return
@@ -119,8 +119,7 @@ export default function Home() {
       if (diff <= 0) {
         setCountdown((c)=>({...c,d:0,h:0,m:0,s:0, active:false}))
         // נעל הגשה אוטומטית וכבה שעון
-        dataManager.updateSettings({ submissionsLocked: true, countdownActive: false })
-        dataManager.mergeAndSave?.()
+        await dataManager.updateSettings({ submissionsLocked: true, countdownActive: false })
         return
       }
       const d = Math.floor(diff / (1000*60*60*24))
@@ -130,7 +129,7 @@ export default function Home() {
       setCountdown((c)=>({...c,d,h,m,s}))
     }
     calc()
-    const iv = setInterval(calc, 1000)
+    const iv = setInterval(() => calc(), 1000)
     return ()=>clearInterval(iv)
   }, [countdown.active, countdown.target])
 

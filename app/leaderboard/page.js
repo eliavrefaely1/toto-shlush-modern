@@ -58,7 +58,7 @@ export default function LeaderboardPage() {
   // אתחול פעם אחת: מושך מהשרת ומגדיר לשבוע הנוכחי
   useEffect(() => {
     const init = async () => {
-      await dataManager.syncFromServer()
+      await dataManager.initialize()
       const w = dataManager.getSettings().currentWeek || 1
       setSelectedWeek(w)
     }
@@ -111,7 +111,7 @@ export default function LeaderboardPage() {
       setAvailableWeeks(allWeeks.length > 0 ? allWeeks : [selectedWeek || 1])
     } catch (e) {
       // נפילה — fallback לנתונים מקומיים
-      const currentLeaderboard = dataManager.getLeaderboard(selectedWeek)
+      const currentLeaderboard = await dataManager.getLeaderboard(selectedWeek)
       const currentPot = dataManager.getPot(selectedWeek)
       const weekMatches = dataManager.getMatches(selectedWeek) || []
       setLeaderboard(currentLeaderboard)
@@ -153,7 +153,7 @@ export default function LeaderboardPage() {
   const refreshNow = async () => {
     setIsRefreshing(true)
     try {
-      await dataManager.syncFromServer();
+      await dataManager.initialize();
       loadData();
     } finally {
       // ריענון מלא כמו F5

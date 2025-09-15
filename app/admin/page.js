@@ -17,7 +17,7 @@ export default function AdminPage() {
   const [toast, setToast] = useState(null);
   const [adminToken, setAdminToken] = useState('');
 
-  const [settings, setSettings] = useState({ currentWeek: 1, adminPassword: '1234', entryFee: 35 });
+  const [settings, setSettings] = useState({ currentWeek: 1, adminPassword: '1234', entryFee: 35, submissionsLocked: false });
   const [matches, setMatches] = useState([]);
   const [participants, setParticipants] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
@@ -30,11 +30,15 @@ export default function AdminPage() {
   const [countdownActiveLocal, setCountdownActiveLocal] = useState(false);
   const [countdownDate, setCountdownDate] = useState('');
   const [countdownTime, setCountdownTime] = useState('');
+  // מודל שינוי שם
+  const [showRenameModal, setShowRenameModal] = useState(false);
+  const [renameUser, setRenameUser] = useState(null);
+  const [newUserName, setNewUserName] = useState('');
 
   useEffect(() => {
     if (isAuthenticated) {
       (async () => {
-        await dataManager.syncFromServer();
+        await dataManager.initialize();
         loadAdminData();
       })();
     }
@@ -55,7 +59,7 @@ export default function AdminPage() {
   const refreshAll = async () => {
     setIsRefreshing(true);
     try {
-      await dataManager.syncFromServer();
+      await dataManager.initialize();
       loadAdminData();
     } finally {
       // ריענון מלא כמו F5
@@ -70,9 +74,10 @@ export default function AdminPage() {
   const resetLocalCache = async () => {
     if (!confirm('לאפס קאש מקומי ולמשוך מהשרת?')) return;
     try {
-      localStorage.removeItem('toto-shlush-data');
-      localStorage.removeItem('toto-current-name');
-      showToast('הקאש המקומי אופס');
+      // אין יותר localStorage - רק רענון מהשרת
+      showToast('מרענן נתונים מהשרת');
+      await dataManager.initialize();
+      loadAdminData();
     } finally {
       if (typeof window !== 'undefined') window.location.reload();
     }
@@ -80,9 +85,8 @@ export default function AdminPage() {
 
   const deleteMatch = async (matchId) => {
     if (confirm('האם אתה בטוח שברצונך למחוק את המשחק?')) {
-      dataManager.deleteMatch(matchId);
-      await dataManager.mergeAndSave?.({ headers: getAdminHeaders() });
-      await dataManager.syncFromServer();
+      await dataManager.deleteMatch(matchId);
+      await dataManager.initialize();
       const updatedMatches = dataManager.getMatches(settings.currentWeek);
       setMatches(updatedMatches);
       showToast('משחק נמחק');
@@ -91,14 +95,8 @@ export default function AdminPage() {
 
   const clearAllMatches = async () => {
     if (confirm('האם אתה בטוח שברצונך למחוק את כל המשחקים?')) {
-      // suppressed console output
-      
       // Clear all matches for current week
-      dataManager.clearAllMatches(settings.currentWeek);
-      
-      // שמירה וסנכרון מול השרת כדי שהמחיקה תהיה קבועה
-      await dataManager.mergeAndSave?.({ headers: getAdminHeaders() });
-      await dataManager.syncFromServer();
+      await dataManager.clearAllMatches(settings.currentWeek);
       
       // Update UI state
       const updated = dataManager.getMatches(settings.currentWeek);
@@ -111,18 +109,31 @@ export default function AdminPage() {
     }
   };
 
-  const loadAdminData = () => {
+  const loadAdminData = async () => {
     setIsLoading(true);
     try {
       const currentSettings = dataManager.getSettings();
       const currentMatches = dataManager.getMatches();
       const currentParticipants = dataManager.getUsers();
-      const currentLeaderboard = dataManager.getLeaderboard();
+      const currentLeaderboard = await dataManager.getLeaderboard();
       const currentPot = dataManager.getPot();
+
+      // Debug: Check for duplicate user IDs
+      const userIds = currentParticipants.map(u => u.id);
+      const duplicateIds = userIds.filter((id, index) => userIds.indexOf(id) !== index);
+      if (duplicateIds.length > 0) {
+        console.warn('Duplicate user IDs found:', duplicateIds);
+        // Remove duplicates by keeping only the first occurrence
+        const uniqueParticipants = currentParticipants.filter((user, index, arr) => 
+          arr.findIndex(u => u.id === user.id) === index
+        );
+        setParticipants(uniqueParticipants);
+      } else {
+        setParticipants(currentParticipants);
+      }
 
       setSettings(currentSettings);
       setMatches(currentMatches);
-      setParticipants(currentParticipants);
       setLeaderboard(currentLeaderboard);
       setPot(currentPot);
       // init countdown controls
@@ -179,12 +190,13 @@ export default function AdminPage() {
       const parsedData = JSON.parse(jsonData);
       
       // מחיקת משחקים קיימים לשבוע הנוכחי
-      dataManager.clearAllMatches(settings.currentWeek);
+      await dataManager.clearAllMatches(settings.currentWeek);
       
       // יצירת משחקים חדשים
       const newMatches = [];
       if (parsedData.rows && Array.isArray(parsedData.rows)) {
-        parsedData.rows.forEach((row, index) => {
+        for (let index = 0; index < parsedData.rows.length; index++) {
+          const row = parsedData.rows[index];
           const match = {
             week: settings.currentWeek,
             homeTeam: row.teamA || row.homeTeam || `קבוצה בית ${index + 1}`,
@@ -196,12 +208,13 @@ export default function AdminPage() {
             date: row.eventStartTime ? String(row.eventStartTime).slice(0,10) : (row.date ? String(row.date).slice(0,10) : ''),
             category: 'טוטו 16'
           };
-          const addedMatch = dataManager.addMatch(match);
+          const addedMatch = await dataManager.addMatch(match);
           newMatches.push(addedMatch);
-        });
+        }
       } else if (Array.isArray(parsedData)) {
         // אם הנתונים הם מערך ישיר
-        parsedData.forEach((row, index) => {
+        for (let index = 0; index < parsedData.length; index++) {
+          const row = parsedData[index];
           const match = {
             week: settings.currentWeek,
             homeTeam: row.teamA || row.homeTeam || `קבוצה בית ${index + 1}`,
@@ -213,17 +226,15 @@ export default function AdminPage() {
             date: row.eventStartTime ? String(row.eventStartTime).slice(0,10) : (row.date ? String(row.date).slice(0,10) : ''),
             category: 'טוטו 16'
           };
-          const addedMatch = dataManager.addMatch(match);
+          const addedMatch = await dataManager.addMatch(match);
           newMatches.push(addedMatch);
-        });
+        }
       }
       
-      await dataManager.mergeAndSave?.({ headers: getAdminHeaders() });
-      await dataManager.syncFromServer();
       setMatches(dataManager.getMatches(settings.currentWeek));
       showToast(`נטענו ${newMatches.length} משחקים`);
     } catch (error) {
-      // suppressed console output
+      console.error('Error uploading JSON:', error);
       showToast('שגיאה בטעינת הנתונים.', 'error');
     }
   };
@@ -245,31 +256,27 @@ export default function AdminPage() {
   };
 
   const updateMatch = async (matchId, field, value) => {
-    const updatedMatch = dataManager.updateMatch(matchId, { [field]: value });
+    const updatedMatch = await dataManager.updateMatch(matchId, { [field]: value });
     if (updatedMatch) {
       setMatches((prev) => prev.map((m) => (m.id === matchId ? updatedMatch : m)));
       if (field === 'result') {
-        dataManager.calculateScores();
-        setLeaderboard(dataManager.getLeaderboard());
+        await dataManager.calculateScores();
+        setLeaderboard(await dataManager.getLeaderboard());
       }
-      // ודא ששמירה עולה לשרת מיד כדי שכל המכשירים יראו
-      await (dataManager.mergeAndSave ? dataManager.mergeAndSave({ headers: getAdminHeaders(), preferLocalSettings: true }) : Promise.resolve());
     }
   };
 
-  const updateSettings = (newSettings) => {
-    dataManager.updateSettings(newSettings);
+  const updateSettings = async (newSettings) => {
+    await dataManager.updateSettings(newSettings);
     setSettings({ ...settings, ...newSettings });
     if (newSettings.currentWeek && newSettings.currentWeek !== settings.currentWeek) {
-      loadAdminData();
+      await loadAdminData();
     }
   };
 
   const toggleLockSubmissions = async () => {
     const next = !settings.submissionsLocked;
-    dataManager.updateSettings({ submissionsLocked: next });
-    await (dataManager.mergeAndSave ? dataManager.mergeAndSave({ headers: getAdminHeaders(), preferLocalSettings: true }) : Promise.resolve());
-    await dataManager.syncFromServer();
+    await dataManager.updateSettings({ submissionsLocked: next });
     setSettings({ ...settings, submissionsLocked: next });
     showToast(next ? 'הגשה ננעלה' : 'הגשה נפתחה');
   };
@@ -286,13 +293,11 @@ export default function AdminPage() {
       if (cleanNewWeekMatches && newWeek > prevWeek) {
         const existing = dataManager.getMatches(newWeek) || []
         if (existing.length === 0 || confirm(`לנקות ${existing.length} משחקים קיימים לשבוע ${newWeek} לפני ייבוא?`)) {
-          dataManager.clearAllMatches(newWeek);
+          await dataManager.clearAllMatches(newWeek);
         }
       }
-      dataManager.updateSettings({ currentWeek: newWeek });
-      await (dataManager.mergeAndSave ? dataManager.mergeAndSave({ headers: getAdminHeaders(), preferLocalSettings: true }) : Promise.resolve());
-      await dataManager.syncFromServer();
-      loadAdminData();
+      await dataManager.updateSettings({ currentWeek: newWeek });
+      await loadAdminData();
       showToast(`עברנו לשבוע ${newWeek}`);
       if (typeof window !== 'undefined') {
         setTimeout(()=>window.location.reload(), 200);
@@ -326,146 +331,164 @@ export default function AdminPage() {
 
   const deleteGuessesForUserCurrentWeek = async (userIdOrName) => {
     if (confirm('למחוק את הניחוש של המשתתף לשבוע הנוכחי?')) {
-      dataManager.deleteUserGuessesByUserAndWeek(userIdOrName, settings.currentWeek);
-      await (dataManager.mergeAndSave ? dataManager.mergeAndSave({ headers: getAdminHeaders() }) : Promise.resolve());
-      await dataManager.syncFromServer();
+      await dataManager.deleteUserGuessesByUserAndWeek(userIdOrName, settings.currentWeek);
       // רענון מלא של נתוני האדמין כדי לשקף את המחיקה מיד
-      dataManager.calculateScores();
-      loadAdminData();
+      await dataManager.calculateScores();
+      await loadAdminData();
       showToast('ניחוש המשתתף לשבוע נמחק');
     }
   };
 
   const clearAllGuessesForCurrentWeek = async () => {
     if (confirm('האם אתה בטוח שברצונך למחוק את כל הניחושים לשבוע הנוכחי?')) {
-      dataManager.clearAllGuesses(settings.currentWeek);
-      await (dataManager.mergeAndSave ? dataManager.mergeAndSave({ headers: getAdminHeaders() }) : Promise.resolve());
-      await dataManager.syncFromServer();
-      dataManager.calculateScores();
-      loadAdminData();
+      await dataManager.clearAllGuesses(settings.currentWeek);
+      await dataManager.calculateScores();
+      await loadAdminData();
       showToast('כל ניחושי השבוע נמחקו');
     }
   };
 
   const deleteGuessById = async (guessId) => {
     if (confirm('למחוק את הניחוש לשבוע הנוכחי?')) {
-      dataManager.deleteUserGuess(guessId);
-      await (dataManager.mergeAndSave ? dataManager.mergeAndSave({ headers: getAdminHeaders() }) : Promise.resolve());
-      await dataManager.syncFromServer();
-      dataManager.calculateScores();
-      loadAdminData();
+      await dataManager.deleteUserGuess(guessId);
+      await dataManager.calculateScores();
+      await loadAdminData();
       showToast('הניחוש נמחק');
     }
   };
 
   const deleteUserCompletely = async (userIdOrName) => {
     if (confirm('למחוק משתמש לחלוטין כולל כל הניחושים? פעולה זו בלתי הפיכה.')) {
-      const res = dataManager.deleteUser(userIdOrName);
-      await (dataManager.mergeAndSave ? dataManager.mergeAndSave({ headers: getAdminHeaders() }) : Promise.resolve());
-      await dataManager.syncFromServer();
-      dataManager.calculateScores();
-      loadAdminData();
+      const res = await dataManager.deleteUser(userIdOrName);
+      await dataManager.calculateScores();
+      await loadAdminData();
       showToast(`נמחקו ${res.usersRemoved} משתמש/ים ו-${res.guessesRemoved} ניחושים.`);
     }
   };
 
   const updatePaymentStatus = async (userId, paymentStatus) => {
-    const updatedUser = dataManager.updateUserPaymentStatus(userId, paymentStatus);
+    const updatedUser = await dataManager.updateUserPaymentStatus(userId, paymentStatus);
     if (updatedUser) {
       // עדכן את ה-state ישירות במקום לטעון מחדש
       setParticipants(prev => prev.map(u => u.id === userId ? updatedUser : u));
-      // שמור לשרת מיד עם headers
-      await (dataManager.mergeAndSave ? dataManager.mergeAndSave({ headers: getAdminHeaders() }) : Promise.resolve());
-      // לא לקרוא ל-syncFromServer כאן כי זה יחליף את הנתונים
     }
     showToast(`סטטוס התשלום עודכן ל-${paymentStatus === 'paid' ? 'שולם' : 'לא שולם'}`);
   };
 
-  const createDefaultMatches = () => {
-    const newMatches = dataManager.createDefaultMatches(settings.currentWeek);
+  const handleRenameUser = async () => {
+    if (!renameUser || !newUserName.trim()) return;
+    
+    try {
+      const updatedUser = await dataManager.renameUser(renameUser.name, newUserName.trim());
+      if (updatedUser) {
+        // עדכן את ה-state
+        setParticipants(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
+        showToast(`השם שונה מ-"${renameUser.name}" ל-"${newUserName.trim()}"`);
+        setShowRenameModal(false);
+        setRenameUser(null);
+        setNewUserName('');
+      }
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
+  };
+
+  const openRenameModal = (user) => {
+    setRenameUser(user);
+    setNewUserName(user.name);
+    setShowRenameModal(true);
+  };
+
+  const createDefaultMatches = async () => {
+    const newMatches = await dataManager.createDefaultMatches(settings.currentWeek);
     setMatches(newMatches);
     showToast(`${newMatches.length} משחקים נוצרו`);
   };
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen relative flex items-center justify-center bg-gradient-to-br from-gray-50 via-white to-gray-100">
-        <div className="absolute top-4 right-4">
-          <button onClick={() => router.push('/')} className="btn btn-secondary flex items-center gap-2">
-            <ArrowLeft className="w-4 h-4" /> חזרה לדף הבית
-          </button>
-        </div>
-        {toast && (
-          <div className={`fixed top-4 right-4 z-50 px-4 py-2 rounded text-white shadow ${toast.type==='success'?'bg-green-600':'bg-red-600'}`}>
-            {toast.msg}
+      <>
+        <div className="min-h-screen relative flex items-center justify-center bg-gradient-to-br from-gray-50 via-white to-gray-100">
+          <div className="absolute top-4 right-4">
+            <button onClick={() => router.push('/')} className="btn btn-secondary flex items-center gap-2">
+              <ArrowLeft className="w-4 h-4" /> חזרה לדף הבית
+            </button>
           </div>
-        )}
-        <div className="card max-w-md mx-auto">
-          <div className="card-content">
-            <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Shield className="w-8 h-8 text-white" />
-              </div>
-              <h2 className="text-2xl font-bold text-blue-800 mb-2">כניסת מנהל</h2>
-              <p className="text-blue-600">הזן את סיסמת המנהל</p>
+          {toast && (
+            <div className={`fixed top-4 right-4 z-50 px-4 py-2 rounded text-white shadow ${toast.type==='success'?'bg-green-600':'bg-red-600'}`}>
+              {toast.msg}
             </div>
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-blue-700 mb-2">סיסמת מנהל</label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="הזן סיסמה"
-                    className="input pl-10"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute left-3 top-3"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4 text-blue-500" /> : <Eye className="w-4 h-4 text-blue-500" />}
-                  </button>
+          )}
+          <div className="card max-w-md mx-auto">
+            <div className="card-content">
+              <div className="text-center mb-6">
+                <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Shield className="w-8 h-8 text-white" />
                 </div>
+                <h2 className="text-2xl font-bold text-blue-800 mb-2">כניסת מנהל</h2>
+                <p className="text-blue-600">הזן את סיסמת המנהל</p>
               </div>
-              {false && (
+              <form onSubmit={handleLogin} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-blue-700 mb-2">Admin API Token (רשות)</label>
-                  <input
-                    type="text"
-                    value={adminToken}
-                    onChange={(e) => setAdminToken(e.target.value)}
-                    placeholder="X-Admin-Token"
-                    className="input"
-                  />
-                  <button type="button" onClick={() => { localStorage.setItem('toto-admin-token', adminToken); showToast('Token נשמר'); }} className="btn btn-secondary mt-2">שמור Token</button>
+                  <label className="block text-sm font-medium text-blue-700 mb-2">סיסמת מנהל</label>
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="הזן סיסמה"
+                      className="input pl-10"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute left-3 top-3"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4 text-blue-500" /> : <Eye className="w-4 h-4 text-blue-500" />}
+                    </button>
+                  </div>
                 </div>
-              )}
-              <button type="submit" className="btn bg-blue-600 hover:bg-blue-700 text-white w-full py-3 text-lg font-bold">
-                <Shield className="w-5 h-5 ml-2" /> כניסה
-              </button>
-            </form>
-            {/* הסרת הצגת סיסמת ברירת מחדל */}
+                {false && (
+                  <div>
+                    <label className="block text-sm font-medium text-blue-700 mb-2">Admin API Token (רשות)</label>
+                    <input
+                      type="text"
+                      value={adminToken}
+                      onChange={(e) => setAdminToken(e.target.value)}
+                      placeholder="X-Admin-Token"
+                      className="input"
+                    />
+                    <button type="button" onClick={() => { localStorage.setItem('toto-admin-token', adminToken); showToast('Token נשמר'); }} className="btn btn-secondary mt-2">שמור Token</button>
+                  </div>
+                )}
+                <button type="submit" className="btn bg-blue-600 hover:bg-blue-700 text-white w-full py-3 text-lg font-bold">
+                  <Shield className="w-5 h-5 ml-2" /> כניסה
+                </button>
+              </form>
+              {/* הסרת הצגת סיסמת ברירת מחדל */}
+            </div>
           </div>
         </div>
-      </div>
+      </>
     );
   }
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-blue-600 text-lg">טוען פאנל מנהל...</p>
+      <>
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto"></div>
+            <p className="mt-4 text-blue-600 text-lg">טוען פאנל מנהל...</p>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   return (
+    <>
       <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100" dir="rtl">
       <div className="max-w-6xl mx-auto px-4 py-8">
         {toast && (
@@ -756,7 +779,7 @@ export default function AdminPage() {
             }
           })
           return (
-          <div className="space-y-6">
+            <div className="space-y-6">
             {/* טבלת דירוג לשבוע הנוכחי (כמו היום) */}
             <div className="card">
               <div className="card-header">
@@ -811,7 +834,7 @@ export default function AdminPage() {
                     </div>
                     <div className="space-y-4">
                     {sortedWeek.map(({ user, guess }) => (
-                      <div key={guess.id} className="border rounded-lg p-4 bg-gray-50">
+                      <div key={`participant-${guess.id}`} className="border rounded-lg p-4 bg-gray-50">
                         <div className="flex items-center justify-between">
                           <div>
                             <h3 className="font-bold text-blue-800">{user.name}</h3>
@@ -877,7 +900,7 @@ export default function AdminPage() {
             }
           })
           return (
-          <div className="space-y-6">
+            <div className="space-y-6">
             <div className="card">
               <div className="card-header">
                 <h2 className="text-xl font-bold text-blue-800">ניהול משתמשים</h2>
@@ -907,7 +930,7 @@ export default function AdminPage() {
                       const g = byUserId.get(u.id)
                       const score = getScore(u)
                       return (
-                        <div key={u.id} className="flex items-center justify-between border rounded-lg p-3 bg-white">
+                        <div key={`user-${u.id}`} className="flex items-center justify-between border rounded-lg p-3 bg-white">
                           <div className="flex-1">
                             <div className="font-bold text-blue-800">{u.name}</div>
                             <div className="text-xs text-gray-500">הצטרף: {new Date(u.createdAt).toLocaleDateString('he-IL')}</div>
@@ -921,6 +944,9 @@ export default function AdminPage() {
                             <div className="text-sm text-gray-500">ניקוד שבועי</div>
                             <div className="text-lg font-bold text-blue-600 text-right">{score || 0}</div>
                             <div className="flex gap-2 mt-2">
+                              <button onClick={() => openRenameModal(u)} className="btn btn-secondary flex items-center gap-2">
+                                <Edit className="w-4 h-4" /> שנה שם
+                              </button>
                               <button onClick={() => deleteUserCompletely(u.id)} className="btn btn-danger flex items-center gap-2">
                                 <Trash2 className="w-4 h-4" /> מחק משתמש
                               </button>
@@ -1054,6 +1080,57 @@ export default function AdminPage() {
           </div>
         )}
       </div>
+
+      {/* מודל שינוי שם */}
+      {showRenameModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-96 max-w-md mx-4">
+            <h3 className="text-lg font-bold text-gray-800 mb-4">שינוי שם משתמש</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">שם נוכחי</label>
+                <input
+                  type="text"
+                  value={renameUser?.name || ''}
+                  disabled
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-600"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">שם חדש</label>
+                <input
+                  type="text"
+                  value={newUserName}
+                  onChange={(e) => setNewUserName(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="הזן שם חדש"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setShowRenameModal(false);
+                  setRenameUser(null);
+                  setNewUserName('');
+                }}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+              >
+                ביטול
+              </button>
+              <button
+                onClick={handleRenameUser}
+                disabled={!newUserName.trim() || newUserName.trim() === renameUser?.name}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                שנה שם
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+    </>
   );
 }
