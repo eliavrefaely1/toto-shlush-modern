@@ -379,6 +379,7 @@ class DataManager {
       id: this.generateUserIdFromName(user.name),
       name: user.name,
       isAdmin: user.isAdmin || false,
+      paymentStatus: user.paymentStatus || 'unpaid', // 'paid' | 'unpaid'
       createdAt: new Date().toISOString(),
       ...user
     };
@@ -389,6 +390,18 @@ class DataManager {
 
   getUserById(userId) {
     return this.data.users.find(u => u.id === userId);
+  }
+
+  // עדכון סטטוס תשלום
+  updateUserPaymentStatus(userId, paymentStatus) {
+    const userIndex = this.data.users.findIndex(u => u.id === userId);
+    if (userIndex !== -1) {
+      this.data.users[userIndex].paymentStatus = paymentStatus;
+      this.data.users[userIndex].updatedAt = new Date().toISOString();
+      this.saveData();
+      return this.data.users[userIndex];
+    }
+    return null;
   }
 
   // מחיקת משתמש וכל הניחושים שלו בכל השבועות

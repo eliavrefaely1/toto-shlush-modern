@@ -47,7 +47,9 @@ export async function GET(request) {
         userId: g.userId,
         name: u?.name || g.name,
         phone: u?.phone || g.phone,
+        paymentStatus: u?.paymentStatus || 'unpaid',
         score,
+        user: u || { name: g.name, phone: g.phone, paymentStatus: 'unpaid' }
       }
     }).sort((a,b)=>b.score - a.score)
 

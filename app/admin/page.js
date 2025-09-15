@@ -369,6 +369,14 @@ export default function AdminPage() {
     }
   };
 
+  const updatePaymentStatus = async (userId, paymentStatus) => {
+    dataManager.updateUserPaymentStatus(userId, paymentStatus);
+    await (dataManager.mergeAndSave ? dataManager.mergeAndSave({ headers: getAdminHeaders() }) : Promise.resolve());
+    await dataManager.syncFromServer();
+    loadAdminData();
+    showToast(`סטטוס התשלום עודכן ל-${paymentStatus === 'paid' ? 'שולם' : 'לא שולם'}`);
+  };
+
   const createDefaultMatches = () => {
     const newMatches = dataManager.createDefaultMatches(settings.currentWeek);
     setMatches(newMatches);
@@ -484,6 +492,7 @@ export default function AdminPage() {
                 { id: 'matches', label: 'משחקים', icon: Trophy },
                 { id: 'results', label: 'תוצאות', icon: Users },
                 { id: 'participants', label: 'משתתפים', icon: Users },
+                { id: 'users', label: 'ניהול משתמשים', icon: Users },
                 { id: 'settings', label: 'הגדרות', icon: Settings },
               ].map((tab) => (
                 <button
@@ -771,7 +780,32 @@ export default function AdminPage() {
                     <p className="text-gray-500">אין ניחושים לשבוע הנוכחי</p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
+                  <>
+                    {/* סיכום תשלומים - רק למשתתפים השבועיים */}
+                    <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                      <h4 className="font-bold text-gray-800 mb-3">סיכום תשלומים - שבוע {settings.currentWeek}</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-green-600">
+                            {participantsWithGuess.filter(({ user }) => (user.paymentStatus || 'unpaid') === 'paid').length}
+                          </div>
+                          <div className="text-sm text-gray-600">שילמו</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-red-600">
+                            {participantsWithGuess.filter(({ user }) => (user.paymentStatus || 'unpaid') === 'unpaid').length}
+                          </div>
+                          <div className="text-sm text-gray-600">לא שילמו</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-blue-600">
+                            ₪{participantsWithGuess.filter(({ user }) => (user.paymentStatus || 'unpaid') === 'paid').length * settings.entryFee}
+                          </div>
+                          <div className="text-sm text-gray-600">סכום שנאסף</div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-4">
                     {sortedWeek.map(({ user, guess }) => (
                       <div key={guess.id} className="border rounded-lg p-4 bg-gray-50">
                         <div className="flex items-center justify-between">
@@ -782,27 +816,67 @@ export default function AdminPage() {
                             </p>
                             <div className="mt-2 text-xs text-blue-600">ניחוש קיים לשבוע {settings.currentWeek}</div>
                           </div>
-                          <div className="text-right">
-                            <div className="text-2xl font-bold text-blue-600">{getScore(user)}</div>
-                            <div className="text-sm text-gray-500">נקודות</div>
-                            <div className="flex flex-col gap-2 mt-2">
-                              <button onClick={() => deleteGuessById(guess.id)} className="btn btn-danger flex items-center gap-2">
-                                <Trash2 className="w-4 h-4" /> מחק ניחוש לשבוע
-                              </button>
+                          <div className="flex items-center gap-4">
+                            {/* צ'ק בוקס תשלום - רק למשתתפים השבועיים */}
+                            <div className="flex flex-col items-center">
+                              <label className="text-xs text-gray-500 mb-1">תשלום</label>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="checkbox"
+                                  checked={(user.paymentStatus || 'unpaid') === 'paid'}
+                                  onChange={(e) => updatePaymentStatus(user.id, e.target.checked ? 'paid' : 'unpaid')}
+                                  className="w-4 h-4 text-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500 focus:ring-2"
+                                />
+                                <span className={`text-xs font-medium ${(user.paymentStatus || 'unpaid') === 'paid' ? 'text-green-600' : 'text-red-600'}`}>
+                                  {(user.paymentStatus || 'unpaid') === 'paid' ? 'שולם' : 'לא שולם'}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-2xl font-bold text-blue-600">{getScore(user)}</div>
+                              <div className="text-sm text-gray-500">נקודות</div>
+                              <div className="flex flex-col gap-2 mt-2">
+                                <button onClick={() => deleteGuessById(guess.id)} className="btn btn-danger flex items-center gap-2">
+                                  <Trash2 className="w-4 h-4" /> מחק ניחוש לשבוע
+                                </button>
+                              </div>
                             </div>
                           </div>
                         </div>
                       </div>
                     ))}
-                  </div>
+                    </div>
+                  </>
                 )}
               </div>
             </div>
-
-            {/* כל המשתמשים אי פעם במערכת */}
+          </div>
+          );
+        })()}
+        {activeTab === 'users' && (() => {
+          const guessesThisWeek = dataManager.getUserGuesses(settings.currentWeek);
+          const byUserId = new Map(guessesThisWeek.map(g => [g.userId, g]))
+          const scoreById = new Map(leaderboard.map(l => [l.userId, l.score]))
+          const scoreByName = new Map(leaderboard.map(l => [String(l.name||'').toLowerCase().trim(), l.score]))
+          const getScore = (u) => (scoreById.get(u.id) ?? scoreByName.get(String(u.name||'').toLowerCase().trim()) ?? 0)
+          const sortedAll = [...participants].sort((a,b) => {
+            const hasA = byUserId.has(a.id), hasB = byUserId.has(b.id)
+            const na = String(a.name||'').toLowerCase(), nb = String(b.name||'').toLowerCase()
+            const ta = new Date(a.createdAt||0).getTime(), tb = new Date(b.createdAt||0).getTime()
+            switch (sortAll) {
+              case 'name_desc': return nb.localeCompare(na)
+              case 'joined_new': return tb - ta
+              case 'joined_old': return ta - tb
+              case 'hasguess_first': return (hasB?1:0) - (hasA?1:0) || nb.localeCompare(na)
+              case 'name_asc':
+              default: return na.localeCompare(nb)
+            }
+          })
+          return (
+          <div className="space-y-6">
             <div className="card">
               <div className="card-header">
-                <h2 className="text-xl font-bold text-blue-800">כל המשתמשים</h2>
+                <h2 className="text-xl font-bold text-blue-800">ניהול משתמשים</h2>
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <p className="text-gray-600">סה"כ {participants.length} משתמשים</p>
                   <div className="flex items-center gap-2">
@@ -830,7 +904,7 @@ export default function AdminPage() {
                       const score = getScore(u)
                       return (
                         <div key={u.id} className="flex items-center justify-between border rounded-lg p-3 bg-white">
-                          <div>
+                          <div className="flex-1">
                             <div className="font-bold text-blue-800">{u.name}</div>
                             <div className="text-xs text-gray-500">הצטרף: {new Date(u.createdAt).toLocaleDateString('he-IL')}</div>
                             {g ? (
