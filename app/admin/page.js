@@ -370,10 +370,14 @@ export default function AdminPage() {
   };
 
   const updatePaymentStatus = async (userId, paymentStatus) => {
-    dataManager.updateUserPaymentStatus(userId, paymentStatus);
-    await (dataManager.mergeAndSave ? dataManager.mergeAndSave({ headers: getAdminHeaders() }) : Promise.resolve());
-    await dataManager.syncFromServer();
-    loadAdminData();
+    const updatedUser = dataManager.updateUserPaymentStatus(userId, paymentStatus);
+    if (updatedUser) {
+      // עדכן את ה-state ישירות במקום לטעון מחדש
+      setParticipants(prev => prev.map(u => u.id === userId ? updatedUser : u));
+      // שמור לשרת מיד עם headers
+      await (dataManager.mergeAndSave ? dataManager.mergeAndSave({ headers: getAdminHeaders() }) : Promise.resolve());
+      // לא לקרוא ל-syncFromServer כאן כי זה יחליף את הנתונים
+    }
     showToast(`סטטוס התשלום עודכן ל-${paymentStatus === 'paid' ? 'שולם' : 'לא שולם'}`);
   };
 
@@ -930,7 +934,7 @@ export default function AdminPage() {
               </div>
             </div>
           </div>
-          );
+        );
         })()}
         {activeTab === 'settings' && (
           <div className="space-y-6">

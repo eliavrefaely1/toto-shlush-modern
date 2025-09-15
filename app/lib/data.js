@@ -63,6 +63,17 @@ class DataManager {
   normalizeData() {
     let changed = false;
 
+    // תיקון paymentStatus חסר למשתמשים
+    if (Array.isArray(this.data.users)) {
+      this.data.users = this.data.users.map(u => {
+        if (!u.paymentStatus) {
+          changed = true;
+          return { ...u, paymentStatus: 'unpaid' };
+        }
+        return u;
+      });
+    }
+
     // ודא שלכל משחק יש מזהה ושבוע מספרי
     if (Array.isArray(this.data.matches)) {
       const seen = new Set();
@@ -141,6 +152,8 @@ class DataManager {
         // מיזוג דו-כיווני: שרת מול מקומי
         const merged = this._mergeData(serverData || this.getDefaultData(), this.data || this.getDefaultData())
         this.data = merged
+        // תיקון נתונים חסרים
+        this.normalizeData()
         if (typeof window !== 'undefined') {
           localStorage.setItem(this.storageKey, JSON.stringify(this.data))
         }
@@ -161,7 +174,13 @@ class DataManager {
     try {
       const res = await fetch('/api/data', { cache: 'no-store' })
       const serverData = res.ok ? await res.json() : null
+      const serverMotola = serverData?.users?.find(u => u.name === 'אבי מוטולה');
+      const localMotola = this.data?.users?.find(u => u.name === 'אבי מוטולה');
+      console.log('📥 Server data before merge:', serverMotola?.paymentStatus, 'updatedAt:', serverMotola?.updatedAt);
+      console.log('💻 Local data before merge:', localMotola?.paymentStatus, 'updatedAt:', localMotola?.updatedAt);
       const merged = this._mergeData(serverData || this.getDefaultData(), this.data)
+      const mergedMotola = merged?.users?.find(u => u.name === 'אבי מוטולה');
+      console.log('🔄 Merged data:', mergedMotola?.paymentStatus, 'updatedAt:', mergedMotola?.updatedAt);
       if (options.preferLocalSettings) {
         // כאשר פעולת אדמין משנה הגדרות – עדיף הערכים המקומיים
         merged.currentWeek = this.data.currentWeek
@@ -172,16 +191,21 @@ class DataManager {
         if (typeof this.data.countdownTarget !== 'undefined') merged.countdownTarget = this.data.countdownTarget
       }
       this.data = merged
+      // תיקון נתונים חסרים
+      this.normalizeData()
       // שמור מקומית לפני ניסיון שרת
       if (typeof window !== 'undefined') {
-        localStorage.setItem(this.storageKey, JSON.stringify(merged))
+        localStorage.setItem(this.storageKey, JSON.stringify(this.data))
       }
+      const motolaUser = merged.users?.find(u => u.name === 'אבי מוטולה');
+      console.log('💾 Sending data to server:', motolaUser?.paymentStatus, 'updatedAt:', motolaUser?.updatedAt);
       const putRes = await fetch('/api/data', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
         body: JSON.stringify(merged)
       })
       if (putRes && putRes.ok) {
+        console.log('✅ Server update successful');
         // לאחר שהשרת עדכן, נקה דגלי מחיקה מקומיים
         this.data.deletedWeeks = []
         this.data.deletedGuessKeys = []
@@ -189,6 +213,8 @@ class DataManager {
         if (typeof window !== 'undefined') {
           localStorage.setItem(this.storageKey, JSON.stringify(this.data))
         }
+      } else {
+        console.log('❌ Server update failed:', putRes.status);
       }
     } catch (err) {
       // offline/אין KV — יתעדכן בפעם הבאה
@@ -274,7 +300,28 @@ class DataManager {
       if (!u) return
       const key = (u.name || '').toLowerCase().trim()
       if (deletedUsers.has(key)) return
-      if (!byName.has(key)) byName.set(key, u)
+      
+      const existing = byName.get(key)
+      if (!existing) {
+        byName.set(key, u)
+      } else {
+        // אם יש משתמש קיים, בדוק מי יותר עדכני לפי updatedAt
+        const existingTime = new Date(existing.updatedAt || existing.createdAt || 0).getTime()
+        const newTime = new Date(u.updatedAt || u.createdAt || 0).getTime()
+        if (key === 'אבי מוטולה') {
+          console.log(`🔄 Merging user ${key}: existing=${existing.paymentStatus}(${existingTime}), new=${u.paymentStatus}(${newTime})`)
+        }
+        if (newTime >= existingTime) {
+          if (key === 'אבי מוטולה') {
+            console.log(`✅ Using newer version for ${key}: ${u.paymentStatus}`)
+          }
+          byName.set(key, { ...existing, ...u })
+        } else {
+          if (key === 'אבי מוטולה') {
+            console.log(`⏰ Keeping older version for ${key}: ${existing.paymentStatus}`)
+          }
+        }
+      }
     })
     merged.users = Array.from(byName.values())
 
@@ -396,9 +443,14 @@ class DataManager {
   updateUserPaymentStatus(userId, paymentStatus) {
     const userIndex = this.data.users.findIndex(u => u.id === userId);
     if (userIndex !== -1) {
+      const now = new Date().toISOString();
       this.data.users[userIndex].paymentStatus = paymentStatus;
-      this.data.users[userIndex].updatedAt = new Date().toISOString();
-      this.saveData();
+      this.data.users[userIndex].updatedAt = now;
+      console.log(`🔄 Updated user ${this.data.users[userIndex].name}: ${paymentStatus} at ${now}`);
+      // שמור מקומית מיד
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(this.storageKey, JSON.stringify(this.data));
+      }
       return this.data.users[userIndex];
     }
     return null;
