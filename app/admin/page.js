@@ -544,17 +544,17 @@ export default function AdminPage() {
             <div className="card">
               <div className="card-header">
                 <h2 className="text-xl font-bold text-blue-800">העלאת נתוני טוטו 16</h2>
-                <p className="text-gray-600">העלה קובץ JSON עם נתוני המשחקים מ-Winner</p>
+                <p className="text-gray-600"></p>
               </div>
               <div className="card-content">
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      העלה קובץ JSON או הדבק נתונים:
+                    <label className="block text-md font-medium text-gray-700 mb-2">
+                      הדבק נתונים:
                     </label>
                     <textarea
                       className="input h-32"
-                      placeholder="הדבק כאן את נתוני ה-JSON מ-Winner..."
+                      placeholder="Winner16 --> inspect --> network --> GetTotoDraws --> GamType96"
                       onChange={(e) => {
                         if (e.target.value.trim()) {
                           uploadJSON(e.target.value);
