@@ -47,7 +47,8 @@ export async function GET() {
         status: 'healthy',
         statusCode: 200,
         responseTime: Date.now() - startTime,
-        note: 'Internal KV check successful'
+        note: 'Internal KV check successful',
+        hasData: !!testData
       };
     } catch (error) {
       health.checks.api = {
