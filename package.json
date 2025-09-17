@@ -31,6 +31,7 @@
   "homepage": "https://github.com/eliavrefaely1/toto-shlush#readme",
   "dependencies": {
     "@upstash/redis": "^1.35.3",
+    "@vercel/analytics": "^1.5.0",
     "@vercel/kv": "^1.0.1",
     "lucide-react": "^0.543.0",
     "next": "^14.2.32",

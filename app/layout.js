@@ -1,5 +1,6 @@
 import './globals.css';
 import Navbar from './components/Navbar.jsx';
+import { Analytics } from '@vercel/analytics/react';
 
 export const metadata = {
   title: 'טוטו שלוש',
@@ -18,6 +19,7 @@ export default function RootLayout({ children }) {
       <body className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100" suppressHydrationWarning={true}>
         <Navbar />
         {children}
+        <Analytics />
       </body>
     </html>
   );
