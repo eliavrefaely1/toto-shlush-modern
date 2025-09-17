@@ -1,10 +1,14 @@
 import './globals.css';
 import Navbar from './components/Navbar.jsx';
 import { Analytics } from '@vercel/analytics/react';
+import * as Sentry from '@sentry/nextjs';
 
 export const metadata = {
   title: 'טוטו שלוש',
   description: 'בואו נביא את המכה! 💰',
+  other: {
+    ...Sentry.getTraceData()
+  }
 };
 
 export default function RootLayout({ children }) {

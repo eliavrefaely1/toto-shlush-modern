@@ -75,3 +75,6 @@ jspm_packages/
 # DynamoDB Local files
 .dynamodb/
 .vercel
+
+# Sentry Config File
+.env.sentry-build-plugin
