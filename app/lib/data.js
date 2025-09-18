@@ -156,6 +156,7 @@ class DataManager {
       currentWeek: 1,
       adminPassword: '1234',
       entryFee: 35,
+      totoFirstPrize: 8000000,
       submissionsLocked: false,
       countdownActive: false,
       countdownTarget: '',
@@ -192,6 +193,7 @@ class DataManager {
         // כאשר פעולת אדמין משנה הגדרות – עדיף הערכים המקומיים
         merged.currentWeek = this.data.currentWeek
         if (typeof this.data.entryFee !== 'undefined') merged.entryFee = this.data.entryFee
+        if (typeof this.data.totoFirstPrize !== 'undefined') merged.totoFirstPrize = this.data.totoFirstPrize
         if (typeof this.data.adminPassword !== 'undefined') merged.adminPassword = this.data.adminPassword
         if (typeof this.data.submissionsLocked !== 'undefined') merged.submissionsLocked = this.data.submissionsLocked
         if (typeof this.data.countdownActive !== 'undefined') merged.countdownActive = this.data.countdownActive
@@ -715,6 +717,7 @@ class DataManager {
       currentWeek: this.data.currentWeek,
       adminPassword: this.data.adminPassword,
       entryFee: this.data.entryFee,
+      totoFirstPrize: this.data.totoFirstPrize || 8000000,
       submissionsLocked: !!this.data.submissionsLocked,
       countdownActive: !!this.data.countdownActive,
       countdownTarget: this.data.countdownTarget || ''
@@ -730,6 +733,9 @@ class DataManager {
     }
     if (Object.prototype.hasOwnProperty.call(settings, 'entryFee')) {
       this.data.entryFee = settings.entryFee;
+    }
+    if (Object.prototype.hasOwnProperty.call(settings, 'totoFirstPrize')) {
+      this.data.totoFirstPrize = settings.totoFirstPrize;
     }
     if (Object.prototype.hasOwnProperty.call(settings, 'submissionsLocked')) {
       this.data.submissionsLocked = !!settings.submissionsLocked;

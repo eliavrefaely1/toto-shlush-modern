@@ -13,6 +13,7 @@ export default function Home() {
   const [matches, setMatches] = useState([])
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [countdown, setCountdown] = useState({active:false, target:'', d:0,h:0,m:0,s:0})
+  const [settings, setSettings] = useState({ totoFirstPrize: 8000000 })
   const topScore = leaderboard.length ? leaderboard[0].score : null
 
   useEffect(() => {
@@ -43,6 +44,7 @@ export default function Home() {
       setMatches(currentMatches)
       setPot(currentPot)
       const s = dataManager.getSettings()
+      setSettings(s)
       if (s.countdownActive && s.countdownTarget) {
         setCountdown({active:true, target:s.countdownTarget, d:0,h:0,m:0,s:0})
       } else {
@@ -82,6 +84,9 @@ export default function Home() {
       // רענן גם משחקים
       const currentMatches = dataManager.getMatches()
       setMatches(currentMatches)
+      // רענן הגדרות
+      const s = dataManager.getSettings()
+      setSettings(s)
     } finally {
       // ריענון מלא כמו F5
       if (typeof window !== 'undefined') {
@@ -226,6 +231,20 @@ export default function Home() {
             <div className="flex items-center gap-3">
               <span className="font-extrabold text-blue-900">₪{pot.totalAmount.toLocaleString()}</span>
               <span className="text-xs text-gray-600">{pot.numOfPlayers} משתתפים × ₪{pot.amountPerPlayer}</span>                                                                                                       
+            </div>
+          </div>
+          {/* פרס ראשון בטוטו */}
+          <div className="bg-red-50 rounded-none border-0 shadow-none py-3 px-4 text-sm flex items-center justify-between" dir="rtl">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 bg-gradient-to-r from-red-500 to-red-600 rounded-full flex items-center justify-center">
+                <Trophy className="w-4 h-4 text-white" />
+              </div>
+              <span className="text-red-800 font-bold">פרס ראשון בטוטו</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="font-extrabold text-red-900">₪{(settings.totoFirstPrize || 8000000).toLocaleString()}</span>
+              <span className="text-xs text-gray-600">{pot.numOfPlayers} משתתפים</span>
+              <span className="text-xs text-gray-600">₪{pot.numOfPlayers > 0 ? ((settings.totoFirstPrize || 8000000) / pot.numOfPlayers).toLocaleString('he-IL', { maximumFractionDigits: 2 }) : '0'} למשתתף</span>
             </div>
           </div>
         </div>

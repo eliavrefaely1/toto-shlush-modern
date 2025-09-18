@@ -17,7 +17,7 @@ export default function AdminPage() {
   const [toast, setToast] = useState(null);
   const [adminToken, setAdminToken] = useState('');
 
-  const [settings, setSettings] = useState({ currentWeek: 1, adminPassword: '1234', entryFee: 35, submissionsLocked: false });
+  const [settings, setSettings] = useState({ currentWeek: 1, adminPassword: '1234', entryFee: 35, totoFirstPrize: 8000000, submissionsLocked: false });
   const [matches, setMatches] = useState([]);
   const [participants, setParticipants] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
@@ -30,10 +30,17 @@ export default function AdminPage() {
   const [countdownActiveLocal, setCountdownActiveLocal] = useState(false);
   const [countdownDate, setCountdownDate] = useState('');
   const [countdownTime, setCountdownTime] = useState('');
+  const [updateTimeout, setUpdateTimeout] = useState(null);
   // מודל שינוי שם
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [renameUser, setRenameUser] = useState(null);
   const [newUserName, setNewUserName] = useState('');
+  
+  // מודל עריכת ניחוש
+  const [showEditGuessModal, setShowEditGuessModal] = useState(false);
+  const [editGuessUser, setEditGuessUser] = useState(null);
+  const [editGuessData, setEditGuessData] = useState(null);
+  const [tempGuesses, setTempGuesses] = useState(Array(16).fill(''));
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -43,6 +50,15 @@ export default function AdminPage() {
       })();
     }
   }, [isAuthenticated]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (updateTimeout) {
+        clearTimeout(updateTimeout);
+      }
+    };
+  }, [updateTimeout]);
 
   // טען טוקן ניהול מהדפדפן (אם מוגדר)
   useEffect(() => {
@@ -268,10 +284,30 @@ export default function AdminPage() {
 
   const updateSettings = async (newSettings) => {
     await dataManager.updateSettings(newSettings);
-    setSettings({ ...settings, ...newSettings });
+    // עדכן את ה-state מיד כדי שה-UI יתעדכן
+    setSettings(prev => ({ ...prev, ...newSettings }));
     if (newSettings.currentWeek && newSettings.currentWeek !== settings.currentWeek) {
       await loadAdminData();
     }
+    showToast('הגדרות נשמרו בהצלחה');
+  };
+
+  const debouncedUpdateSettings = (newSettings) => {
+    // עדכן את ה-state מיד
+    setSettings(prev => ({ ...prev, ...newSettings }));
+    
+    // נקה timeout קודם אם קיים
+    if (updateTimeout) {
+      clearTimeout(updateTimeout);
+    }
+    
+    // הגדר timeout חדש
+    const timeout = setTimeout(async () => {
+      await dataManager.updateSettings(newSettings);
+      showToast('הגדרות נשמרו בהצלחה');
+    }, 1000); // המתן שנייה אחרי שהמשתמש הפסיק להקליד
+    
+    setUpdateTimeout(timeout);
   };
 
   const toggleLockSubmissions = async () => {
@@ -397,6 +433,104 @@ export default function AdminPage() {
     setRenameUser(user);
     setNewUserName(user.name);
     setShowRenameModal(true);
+  };
+
+  // פונקציות עריכת ניחוש
+  const openEditGuessModal = (user, guess) => {
+    if (!user || !guess || !guess.guesses) {
+      showToast('שגיאה בפתיחת עריכת הניחוש', 'error');
+      return;
+    }
+    
+    setEditGuessUser(user);
+    setEditGuessData(guess);
+    // וידוא שהמערך באורך הנכון (16 ניחושים)
+    const guessesArray = Array.isArray(guess.guesses) ? guess.guesses : [];
+    const paddedGuesses = [...guessesArray];
+    while (paddedGuesses.length < 16) {
+      paddedGuesses.push('');
+    }
+    setTempGuesses(paddedGuesses.slice(0, 16)); // העתקת הניחושים הנוכחיים
+    setShowEditGuessModal(true);
+  };
+
+  const handleGuessChange = (matchIndex, newGuess) => {
+    if (matchIndex < 0 || matchIndex >= tempGuesses.length) {
+      console.error('Invalid match index:', matchIndex);
+      return;
+    }
+    
+    const newGuesses = [...tempGuesses];
+    newGuesses[matchIndex] = newGuess;
+    setTempGuesses(newGuesses);
+  };
+
+  const saveEditedGuess = async () => {
+    if (!editGuessData || !editGuessUser) {
+      showToast('שגיאה: נתונים חסרים לעדכון', 'error');
+      return;
+    }
+    
+    // בדיקה שההגשה לא נעולה
+    if (settings.submissionsLocked) {
+      showToast('לא ניתן לשמור ניחושים כאשר ההגשה נעולה', 'error');
+      setShowEditGuessModal(false);
+      return;
+    }
+    
+    try {
+      // עדכון הניחוש
+      const updatedGuess = await dataManager.updateUserGuess(editGuessData.id, {
+        guesses: tempGuesses,
+        updatedAt: new Date().toISOString()
+      });
+      
+      if (!updatedGuess) {
+        showToast('לא נמצא הניחוש לעדכון - ייתכן שנמחק', 'error');
+        setShowEditGuessModal(false);
+        return;
+      }
+      
+      // חישוב מחדש של הניקוד
+      await dataManager.calculateScores();
+      
+      // רענון נתוני האדמין
+      await loadAdminData();
+      
+      showToast(`ניחוש של ${editGuessUser.name} עודכן בהצלחה`);
+      setShowEditGuessModal(false);
+    } catch (error) {
+      console.error('Error saving edited guess:', error);
+      showToast('שגיאה בשמירת הניחוש', 'error');
+    }
+  };
+
+  const closeEditGuessModal = () => {
+    setShowEditGuessModal(false);
+    setEditGuessUser(null);
+    setEditGuessData(null);
+    setTempGuesses(Array(16).fill(''));
+  };
+
+  // בדיקה שהניחוש עדיין קיים לפני פתיחת המודל
+  const handleEditGuessClick = (user, guess) => {
+    // בדיקה שההגשה לא נעולה
+    if (settings.submissionsLocked) {
+      showToast('לא ניתן לערוך ניחושים כאשר ההגשה נעולה', 'error');
+      return;
+    }
+    
+    // בדיקה שהניחוש עדיין קיים במערכת
+    const currentGuesses = dataManager.getUserGuesses(settings.currentWeek);
+    const stillExists = currentGuesses.find(g => g.id === guess.id);
+    
+    if (!stillExists) {
+      showToast('הניחוש נמחק - מרענן נתונים', 'error');
+      loadAdminData();
+      return;
+    }
+    
+    openEditGuessModal(user, guess);
   };
 
   const createDefaultMatches = async () => {
@@ -863,6 +997,14 @@ export default function AdminPage() {
                               <div className="text-2xl font-bold text-blue-600">{getScore(user)}</div>
                               <div className="text-sm text-gray-500">נקודות</div>
                               <div className="flex flex-col gap-2 mt-2">
+                                <button 
+                                  onClick={() => handleEditGuessClick(user, guess)} 
+                                  disabled={settings.submissionsLocked}
+                                  className={`btn btn-primary flex items-center gap-2 ${settings.submissionsLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                  title={settings.submissionsLocked ? 'לא ניתן לערוך כאשר ההגשה נעולה' : ''}
+                                >
+                                  <Edit className="w-4 h-4" /> ערוך ניחוש
+                                </button>
                                 <button onClick={() => deleteGuessById(guess.id)} className="btn btn-danger flex items-center gap-2">
                                   <Trash2 className="w-4 h-4" /> מחק ניחוש לשבוע
                                 </button>
@@ -1008,6 +1150,23 @@ export default function AdminPage() {
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
+                      פרס ראשון בטוטו (₪)
+                    </label>
+                    <input
+                      type="number"
+                      value={settings.totoFirstPrize || ''}
+                      onChange={(e) => {
+                        const value = e.target.value === '' ? 0 : parseInt(e.target.value) || 0;
+                        debouncedUpdateSettings({ totoFirstPrize: value });
+                      }}
+                      className="input"
+                      min="1"
+                      placeholder="8000000"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
                       סיסמת מנהל
                     </label>
                     <input
@@ -1030,7 +1189,7 @@ export default function AdminPage() {
                   
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <h3 className="font-bold text-blue-800 mb-2">סטטיסטיקות</h3>
-                    <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div className="grid grid-cols-3 gap-4 text-sm">
                       <div>
                         <span className="text-gray-600">משחקים:</span>
                         <span className="font-bold text-blue-600 ml-2">{matches.length}</span>
@@ -1046,6 +1205,12 @@ export default function AdminPage() {
                       <div>
                         <span className="text-gray-600">דמי השתתפות:</span>
                         <span className="font-bold text-blue-600 ml-2">₪{pot.amountPerPlayer}</span>
+                      </div>
+                      <div className="col-span-2">
+                        <div className="text-red-600 font-bold text-sm">פרס ראשון בטוטו</div>
+                        <div className="text-red-600 font-bold text-lg">₪{(settings.totoFirstPrize || 8000000).toLocaleString()}</div>
+                        <div className="text-gray-600 text-sm">{pot.numOfPlayers} משתתפים</div>
+                        <div className="text-gray-600 text-sm">₪{pot.numOfPlayers > 0 ? ((settings.totoFirstPrize || 8000000) / pot.numOfPlayers).toLocaleString('he-IL', { maximumFractionDigits: 2 }) : '0'} למשתתף</div>
                       </div>
                     </div>
                   </div>
@@ -1125,6 +1290,98 @@ export default function AdminPage() {
                 className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
                 שנה שם
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* מודל עריכת ניחוש */}
+      {showEditGuessModal && editGuessUser && editGuessData && editGuessData.guesses && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            <h3 className="text-xl font-bold text-gray-800 mb-4">
+              עריכת ניחוש - {editGuessUser.name}
+            </h3>
+            <div className="space-y-6">
+              {/* סיכום נוכחי */}
+              <div className="bg-gray-50 rounded-lg p-4">
+                <h4 className="font-bold text-gray-800 mb-2">ניחושים נוכחיים:</h4>
+                <div className="grid grid-cols-8 gap-2">
+                  {editGuessData.guesses.map((guess, index) => (
+                    <div key={index} className="text-center p-2 bg-white rounded border">
+                      <div className="text-xs text-gray-600">{index + 1}</div>
+                      <div className="text-lg font-bold">{guess || '?'}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* עריכת ניחושים */}
+              <div>
+                <h4 className="font-bold text-gray-800 mb-4">ערוך ניחושים:</h4>
+                {matches.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500">אין משחקים זמינים לעריכה</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {matches.map((match, index) => (
+                    <div key={match.id} className="border rounded-lg p-4 bg-gray-50">
+                      <div className="text-center mb-3">
+                        <h5 className="font-bold text-blue-800 text-sm">משחק {index + 1}</h5>
+                        <div className="text-sm font-bold text-green-700">
+                          {match.homeTeam} vs {match.awayTeam}
+                        </div>
+                      </div>
+                      <div className="flex justify-center gap-2">
+                        {['1', 'X', '2'].map((option) => (
+                          <button
+                            key={option}
+                            type="button"
+                            onClick={() => handleGuessChange(index, option)}
+                            className={`w-10 h-10 rounded-full text-lg font-bold transition-all ${
+                              tempGuesses[index] === option
+                                ? 'bg-blue-500 text-white shadow-lg scale-110'
+                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                            }`}
+                          >
+                            {option}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* סיכום חדש */}
+              <div className="bg-blue-50 rounded-lg p-4">
+                <h4 className="font-bold text-gray-800 mb-2">ניחושים חדשים:</h4>
+                <div className="grid grid-cols-8 gap-2">
+                  {tempGuesses.map((guess, index) => (
+                    <div key={index} className="text-center p-2 bg-white rounded border">
+                      <div className="text-xs text-gray-600">{index + 1}</div>
+                      <div className="text-lg font-bold">{guess || '?'}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={closeEditGuessModal}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+              >
+                ביטול
+              </button>
+              <button
+                onClick={saveEditedGuess}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              >
+                שמור שינויים
               </button>
             </div>
           </div>

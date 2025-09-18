@@ -30,6 +30,7 @@ const defaultData = {
   currentWeek: 1,
   adminPassword: '1234',
   entryFee: 35,
+  totoFirstPrize: 8000000,
   matches: [],
   users: [],
   userGuesses: [],
@@ -126,6 +127,7 @@ export async function GET(request) {
         filtered.currentWeek = meta?.currentWeek ?? raw.currentWeek
         filtered.adminPassword = meta?.adminPassword ?? raw.adminPassword
         filtered.entryFee = meta?.entryFee ?? raw.entryFee
+        filtered.totoFirstPrize = meta?.totoFirstPrize ?? raw.totoFirstPrize ?? 8000000
         filtered.submissionsLocked = (meta?.submissionsLocked ?? raw.submissionsLocked) ?? false
         filtered.countdownActive = (meta?.countdownActive ?? raw.countdownActive) ?? false
         filtered.countdownTarget = meta?.countdownTarget ?? raw.countdownTarget ?? ''
@@ -194,6 +196,7 @@ export async function PUT(req) {
       currentWeek: toSave.currentWeek ?? defaultData.currentWeek,
       adminPassword: toSave.adminPassword ?? defaultData.adminPassword,
       entryFee: toSave.entryFee ?? defaultData.entryFee,
+      totoFirstPrize: toSave.totoFirstPrize ?? defaultData.totoFirstPrize,
       submissionsLocked: !!toSave.submissionsLocked,
       countdownActive: !!toSave.countdownActive,
       countdownTarget: toSave.countdownTarget || ''
