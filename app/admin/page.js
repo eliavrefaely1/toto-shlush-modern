@@ -99,6 +99,7 @@ export default function AdminPage() {
     }
   }
 
+
   const deleteMatch = async (matchId) => {
     if (confirm('האם אתה בטוח שברצונך למחוק את המשחק?')) {
       await dataManager.deleteMatch(matchId);
@@ -402,11 +403,13 @@ export default function AdminPage() {
     }
   };
 
-  const updatePaymentStatus = async (userId, paymentStatus) => {
-    const updatedUser = await dataManager.updateUserPaymentStatus(userId, paymentStatus);
-    if (updatedUser) {
+  const updatePaymentStatus = async (guessId, paymentStatus) => {
+    const updatedGuess = await dataManager.updateGuessPaymentStatus(guessId, paymentStatus);
+    if (updatedGuess) {
       // עדכן את ה-state ישירות במקום לטעון מחדש
-      setParticipants(prev => prev.map(u => u.id === userId ? updatedUser : u));
+      setLeaderboard(prev => prev.map(entry => 
+        entry.id === guessId ? { ...entry, paymentStatus: paymentStatus } : entry
+      ));
     }
     showToast(`סטטוס התשלום עודכן ל-${paymentStatus === 'paid' ? 'שולם' : 'לא שולם'}`);
   };
@@ -984,12 +987,12 @@ export default function AdminPage() {
                               <div className="flex items-center gap-2">
                                 <input
                                   type="checkbox"
-                                  checked={(user.paymentStatus || 'unpaid') === 'paid'}
-                                  onChange={(e) => updatePaymentStatus(user.id, e.target.checked ? 'paid' : 'unpaid')}
+                                  checked={(guess.paymentStatus || 'unpaid') === 'paid'}
+                                  onChange={(e) => updatePaymentStatus(guess.id, e.target.checked ? 'paid' : 'unpaid')}
                                   className="w-4 h-4 text-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500 focus:ring-2"
                                 />
-                                <span className={`text-xs font-medium ${(user.paymentStatus || 'unpaid') === 'paid' ? 'text-green-600' : 'text-red-600'}`}>
-                                  {(user.paymentStatus || 'unpaid') === 'paid' ? 'שולם' : 'לא שולם'}
+                                <span className={`text-xs font-medium ${(guess.paymentStatus || 'unpaid') === 'paid' ? 'text-green-600' : 'text-red-600'}`}>
+                                  {(guess.paymentStatus || 'unpaid') === 'paid' ? 'שולם' : 'לא שולם'}
                                 </span>
                               </div>
                             </div>

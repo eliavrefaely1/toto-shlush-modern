@@ -129,7 +129,7 @@ class DataManager {
       });
     }
 
-    // תיקון ניחושים כפולים
+    // תיקון ניחושים כפולים והוספת paymentStatus חסר
     if (Array.isArray(this.data.userGuesses)) {
       const seen = new Set();
       this.data.userGuesses = this.data.userGuesses.filter(g => {
@@ -139,6 +139,12 @@ class DataManager {
         }
         seen.add(g.id);
         return true;
+      }).map(g => {
+        if (!g.paymentStatus) {
+          changed = true;
+          return { ...g, paymentStatus: 'unpaid' };
+        }
+        return g;
       });
     }
 
@@ -569,6 +575,7 @@ class DataManager {
       week: guess.week || this.data.currentWeek,
       guesses: guess.guesses || Array(16).fill(''),
       score: 0,
+      paymentStatus: 'unpaid', // מצב שולם לכל ניחוש בנפרד
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       ...guess
@@ -591,6 +598,19 @@ class DataManager {
     const guessIndex = this.data.userGuesses.findIndex(g => g.id === guessId);
     if (guessIndex !== -1) {
       this.data.userGuesses[guessIndex] = { ...this.data.userGuesses[guessIndex], ...updates, updatedAt: new Date().toISOString() };
+      await this.saveDataToServer();
+      return this.data.userGuesses[guessIndex];
+    }
+    return null;
+  }
+
+  // עדכון סטטוס תשלום לניחוש ספציפי
+  async updateGuessPaymentStatus(guessId, paymentStatus) {
+    const guessIndex = this.data.userGuesses.findIndex(g => g.id === guessId);
+    if (guessIndex !== -1) {
+      const now = new Date().toISOString();
+      this.data.userGuesses[guessIndex].paymentStatus = paymentStatus;
+      this.data.userGuesses[guessIndex].updatedAt = now;
       await this.saveDataToServer();
       return this.data.userGuesses[guessIndex];
     }

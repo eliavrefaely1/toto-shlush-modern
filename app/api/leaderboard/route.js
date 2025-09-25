@@ -43,7 +43,8 @@ export async function GET(request) {
         if (results[i] && g.guesses?.[i] === results[i]) score++
       }
       const u = byId.get(g.userId)
-      const finalPaymentStatus = u?.paymentStatus || 'unpaid';
+      // מצב השולם עכשיו מגיע מהניחוש עצמו, לא מהמשתמש
+      const finalPaymentStatus = g.paymentStatus || 'unpaid';
       
       return {
         id: g.id,

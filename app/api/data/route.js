@@ -42,8 +42,196 @@ const defaultData = {
   countdownTarget: ''
 }
 
-export const POST = async () => {
+export const POST = async (req) => {
   try {
+    const { action } = await req.json()
+    
+    if (action === 'status') {
+      // בדיקת סטטוס הטבלאות
+      const raw = (await kv.get(KEY)) || defaultData
+      const meta = await kv.get(META_KEY).catch(()=>null)
+      const users = await kv.get(USERS_KEY).catch(()=>null)
+      
+      let status = {
+        mainTable: {
+          size: JSON.stringify(raw).length,
+          users: raw.users?.length || 0,
+          matches: raw.matches?.length || 0,
+          guesses: raw.userGuesses?.length || 0
+        },
+        splitTables: {
+          meta: meta ? JSON.stringify(meta).length : 0,
+          users: users ? JSON.stringify(users).length : 0
+        },
+        issues: []
+      }
+      
+      // בדיקת בעיות
+      if (Array.isArray(raw.users)) {
+        const userIds = new Set()
+        const duplicateUsers = raw.users.filter(u => {
+          if (!u.id || userIds.has(u.id)) return true
+          userIds.add(u.id)
+          return false
+        })
+        if (duplicateUsers.length > 0) {
+          status.issues.push(`${duplicateUsers.length} משתמשים כפולים`)
+        }
+      }
+      
+      if (Array.isArray(raw.userGuesses)) {
+        const guessIds = new Set()
+        const duplicateGuesses = raw.userGuesses.filter(g => {
+          if (!g.id || guessIds.has(g.id)) return true
+          guessIds.add(g.id)
+          return false
+        })
+        if (duplicateGuesses.length > 0) {
+          status.issues.push(`${duplicateGuesses.length} ניחושים כפולים`)
+        }
+      }
+      
+      if (Array.isArray(raw.matches)) {
+        const matchIds = new Set()
+        const duplicateMatches = raw.matches.filter(m => {
+          if (!m.id || matchIds.has(m.id)) return true
+          matchIds.add(m.id)
+          return false
+        })
+        if (duplicateMatches.length > 0) {
+          status.issues.push(`${duplicateMatches.length} משחקים כפולים`)
+        }
+      }
+      
+      return new Response(JSON.stringify({ ok: true, status }), { status: 200 })
+    }
+    
+    if (action === 'cleanup') {
+      // ניקוי וסדור הטבלאות
+      const ADMIN_TOKEN = process.env.ADMIN_TOKEN || process.env.X_ADMIN_TOKEN
+      const token = req.headers.get('x-admin-token')
+      
+      // אבטחה: דרוש טוקן אדמין לניקוי
+      if (ADMIN_TOKEN && (!token || token !== ADMIN_TOKEN)) {
+        return new Response(JSON.stringify({ ok: false, error: 'Unauthorized' }), { status: 401 })
+      }
+      
+      const raw = (await kv.get(KEY)) || defaultData
+      let cleaned = 0
+      
+      // ניקוי משתמשים כפולים וחסרי ID
+      if (Array.isArray(raw.users)) {
+        const seen = new Set()
+        const originalLength = raw.users.length
+        raw.users = raw.users.filter(u => {
+          if (!u.id || seen.has(u.id)) {
+            cleaned++
+            return false
+          }
+          seen.add(u.id)
+          return true
+        }).map(u => ({
+          ...u,
+          paymentStatus: u.paymentStatus || 'unpaid',
+          createdAt: u.createdAt || new Date().toISOString(),
+          updatedAt: u.updatedAt || new Date().toISOString()
+        }))
+        
+        console.log(`Cleaned users: ${originalLength} → ${raw.users.length} (removed ${cleaned})`)
+      }
+      
+      // ניקוי ניחושים כפולים וחסרי ID
+      if (Array.isArray(raw.userGuesses)) {
+        const seen = new Set()
+        const originalLength = raw.userGuesses.length
+        raw.userGuesses = raw.userGuesses.filter(g => {
+          if (!g.id || seen.has(g.id)) {
+            cleaned++
+            return false
+          }
+          seen.add(g.id)
+          return true
+        }).map(g => ({
+          ...g,
+          paymentStatus: g.paymentStatus || 'unpaid',
+          createdAt: g.createdAt || new Date().toISOString(),
+          updatedAt: g.updatedAt || new Date().toISOString()
+        }))
+        
+        console.log(`Cleaned guesses: ${originalLength} → ${raw.userGuesses.length} (removed ${cleaned})`)
+      }
+      
+      // ניקוי משחקים כפולים וחסרי ID
+      if (Array.isArray(raw.matches)) {
+        const seen = new Set()
+        const originalLength = raw.matches.length
+        raw.matches = raw.matches.filter(m => {
+          if (!m.id || seen.has(m.id)) {
+            cleaned++
+            return false
+          }
+          seen.add(m.id)
+          return true
+        }).map(m => ({
+          ...m,
+          week: Number(m.week) || 1,
+          createdAt: m.createdAt || new Date().toISOString(),
+          updatedAt: m.updatedAt || new Date().toISOString()
+        }))
+        
+        console.log(`Cleaned matches: ${originalLength} → ${raw.matches.length} (removed ${cleaned})`)
+      }
+      
+      // שמירה מחדש עם הטבלאות המפוצלות
+      await kv.set(KEY, raw)
+      
+      // עדכון הטבלאות המפוצלות
+      const metaToSave = {
+        currentWeek: raw.currentWeek ?? defaultData.currentWeek,
+        adminPassword: raw.adminPassword ?? defaultData.adminPassword,
+        entryFee: raw.entryFee ?? defaultData.entryFee,
+        totoFirstPrize: raw.totoFirstPrize ?? defaultData.totoFirstPrize,
+        submissionsLocked: !!raw.submissionsLocked,
+        countdownActive: !!raw.countdownActive,
+        countdownTarget: raw.countdownTarget || ''
+      }
+      await kv.set(META_KEY, metaToSave)
+      
+      if (Array.isArray(raw.users)) {
+        await kv.set(USERS_KEY, raw.users)
+      }
+      
+      // עדכון טבלאות לפי שבוע
+      const groupByWeek = (arr) => {
+        const map = new Map()
+        ;(Array.isArray(arr) ? arr : []).forEach(it => {
+          const w = Number(it?.week)
+          if (!Number.isNaN(w)) {
+            if (!map.has(w)) map.set(w, [])
+            map.get(w).push(it)
+          }
+        })
+        return map
+      }
+      
+      const matchesByWeek = groupByWeek(raw.matches)
+      for (const [w, list] of matchesByWeek.entries()) {
+        await kv.set(MATCHES_KEY(w), list)
+      }
+      
+      const guessesByWeek = groupByWeek(raw.userGuesses)
+      for (const [w, list] of guessesByWeek.entries()) {
+        await kv.set(GUESSES_KEY(w), list)
+      }
+      
+      return new Response(JSON.stringify({ 
+        ok: true, 
+        cleaned,
+        message: `נוקו ${cleaned} רשומות כפולות או חסרות`
+      }), { status: 200 })
+    }
+    
+    // Redis test (original functionality)
     if (!redis) return new NextResponse(JSON.stringify({ ok: false, error: 'Redis not configured' }), { status: 503 })
     const result = await redis.get('item')
     return new NextResponse(JSON.stringify({ result }), { status: 200 })
