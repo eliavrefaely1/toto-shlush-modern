@@ -48,42 +48,29 @@ export default function LeaderboardPage() {
   const router = useRouter()
   const [leaderboard, setLeaderboard] = useState([])
   const [pot, setPot] = useState({ totalAmount: 0, numOfPlayers: 0 })
-  const [selectedWeek, setSelectedWeek] = useState(dataManager.getSettings().currentWeek || 1)
-  const [availableWeeks, setAvailableWeeks] = useState([1])
   const [matchesForWeek, setMatchesForWeek] = useState([])
   const [expanded, setExpanded] = useState({})
   const [isRefreshing, setIsRefreshing] = useState(false)
   const topScore = leaderboard.length ? leaderboard[0].score : null
 
-  // אתחול פעם אחת: מושך מהשרת ומגדיר לשבוע הנוכחי
-  useEffect(() => {
-    const init = async () => {
-      await dataManager.initialize()
-      const w = dataManager.getSettings().currentWeek || 1
-      setSelectedWeek(w)
-    }
-    init()
-  }, [])
-
-  // כל שינוי בשבוע טוען מחדש את הנתונים
+  // טען נתונים פעם אחת
   useEffect(() => {
     loadData()
-  }, [selectedWeek])
+  }, [])
 
   const loadData = async () => {
-    // משוך דירוג מהיר מהשרת + נתוני משחקים וניחושים לשבוע
+    // משוך דירוג מהיר מהשרת + נתוני משחקים וניחושים
     try {
-      const w = selectedWeek
       const [lbRes, dataRes] = await Promise.all([
-        fetch(`/api/leaderboard?week=${w}`, { cache: 'no-store' }),
-        fetch(`/api/data?week=${w}&fields=matches,guesses,settings`, { cache: 'no-store' })
+        fetch(`/api/leaderboard`, { cache: 'no-store' }),
+        fetch(`/api/data?fields=matches,guesses,settings`, { cache: 'no-store' })
       ])
       let lb = []
       if (lbRes.ok) {
         const j = await lbRes.json()
         lb = Array.isArray(j.leaderboard) ? j.leaderboard : []
       }
-      let matches = [], guesses = [], entryFee = dataManager.getSettings().entryFee
+      let matches = [], guesses = [], entryFee = (await dataManager.getSettings()).entryFee
       if (dataRes.ok) {
         const d = await dataRes.json()
         matches = Array.isArray(d.matches) ? d.matches : []
@@ -103,17 +90,11 @@ export default function LeaderboardPage() {
       setMatchesForWeek(matches)
       // חישוב קופה מקומי קל
       setPot({ totalAmount: (guesses.length * entryFee), numOfPlayers: guesses.length, amountPerPlayer: entryFee })
-
-      // טעינת שבועות זמינים
-      const allWeeks = [...new Set((dataManager.data.userGuesses || []).map(g => g.week))]
-      if (!allWeeks.includes(selectedWeek)) allWeeks.push(selectedWeek)
-      allWeeks.sort((a,b)=>b-a)
-      setAvailableWeeks(allWeeks.length > 0 ? allWeeks : [selectedWeek || 1])
     } catch (e) {
       // נפילה — fallback לנתונים מקומיים
-      const currentLeaderboard = await dataManager.getLeaderboard(selectedWeek)
-      const currentPot = dataManager.getPot(selectedWeek)
-      const weekMatches = dataManager.getMatches(selectedWeek) || []
+      const currentLeaderboard = await dataManager.getLeaderboard(1)
+      const currentPot = await dataManager.getPot(1)
+      const weekMatches = await dataManager.getMatches(1) || []
       setLeaderboard(currentLeaderboard)
       setPot(currentPot)
       setMatchesForWeek(weekMatches)
@@ -193,7 +174,7 @@ export default function LeaderboardPage() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `toto-week-${selectedWeek}-guesses-matrix.xls`
+    a.download = `toto-guesses-matrix.xls`
     document.body.appendChild(a)
     a.click()
     a.remove()
@@ -233,7 +214,7 @@ export default function LeaderboardPage() {
     ctx.fillStyle = '#1e3a8a'
     ctx.font = 'bold 20px sans-serif'
     ctx.textAlign = 'right'
-    ctx.fillText(`טבלת ניחושים — שבוע ${selectedWeek}`, baseW - pad, pad + 22)
+    ctx.fillText(`טבלת ניחושים`, baseW - pad, pad + 22)
 
     // רקע ראש טבלה
     ctx.fillStyle = '#e6f0ff'
@@ -344,7 +325,7 @@ export default function LeaderboardPage() {
     const url = canvas.toDataURL('image/png')
     const a = document.createElement('a')
     a.href = url
-    a.download = `toto-week-${selectedWeek}-guesses-matrix.png`
+    a.download = `toto-guesses-matrix.png`
     document.body.appendChild(a)
     a.click()
     a.remove()
@@ -361,10 +342,10 @@ export default function LeaderboardPage() {
     const thead = `<tr>${headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr>`
     const tbody = rows.map(r=>`<tr>${r.map(c=>`<td>${esc(c)}</td>`).join('')}</tr>`).join('')
     const html = `<!DOCTYPE html><html lang=he dir=rtl><head><meta charset=utf-8>
-      <title>טבלת ניחושים — שבוע ${selectedWeek}</title>
+      <title>טבלת ניחושים</title>
       <style>table{border-collapse:collapse;font-family:sans-serif;width:100%}th,td{border:1px solid #ccc;padding:6px 8px;text-align:center}th{background:#e5efff}</style>
     </head><body>
-      <h3 style="text-align:center;margin:0 0 8px">טבלת ניחושים — שבוע ${selectedWeek}</h3>
+      <h3 style="text-align:center;margin:0 0 8px">טבלת ניחושים</h3>
       <table>${thead}${tbody}</table>
       <script>window.onload=()=>setTimeout(()=>window.print(),50)</script>
     </body></html>`
@@ -383,18 +364,8 @@ export default function LeaderboardPage() {
             <h1 className="text-3xl font-bold text-blue-800">טבלת דירוג</h1>
           </div>
           
-          {/* בחירת שבוע */}
+          {/* כפתורי פעולה */}
           <div className="flex items-center justify-center gap-4 mb-6">
-            <label className="text-lg font-medium text-gray-700">שבוע:</label>
-            <select
-              value={selectedWeek}
-              onChange={(e) => setSelectedWeek(parseInt(e.target.value))}
-              className="input w-32 text-center"
-            >
-              {availableWeeks.map(week => (
-                <option key={week} value={week}>שבוע {week}</option>
-              ))}
-            </select>
             <button onClick={refreshNow} disabled={isRefreshing} className="btn btn-secondary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
               <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
               {isRefreshing ? 'מרענן...' : 'רענן'}

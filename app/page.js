@@ -20,15 +20,16 @@ export default function Home() {
     const init = async () => {
       await dataManager.initialize()
       // משוך קופה מהשרת (קל משקל)
-      let currentPot = dataManager.getPot()
+      let currentPot = await dataManager.getPot()
       try {
-        const w = dataManager.getSettings().currentWeek || 1
+        const s = await dataManager.getSettings()
+        const w = 1 // תמיד שבוע 1
         const resPot = await fetch(`/api/pot?week=${w}`, { cache: 'no-store' })
         if (resPot.ok) currentPot = await resPot.json()
       } catch (_) {}
       // משוך דירוג מהיר מהשרת (קל משקל)
       try {
-        const w = dataManager.getSettings().currentWeek || 1
+        const w = 1 // תמיד שבוע 1
         const res = await fetch(`/api/leaderboard?week=${w}`, { cache: 'no-store' })
         if (res.ok) {
           const j = await res.json()
@@ -40,10 +41,10 @@ export default function Home() {
         setLeaderboard(await dataManager.getLeaderboard())
       }
       // טען משחקי השבוע הנוכחי
-      const currentMatches = dataManager.getMatches()
+      const currentMatches = await dataManager.getMatches()
       setMatches(currentMatches)
       setPot(currentPot)
-      const s = dataManager.getSettings()
+      const s = await dataManager.getSettings()
       setSettings(s)
       if (s.countdownActive && s.countdownTarget) {
         setCountdown({active:true, target:s.countdownTarget, d:0,h:0,m:0,s:0})
@@ -140,7 +141,7 @@ export default function Home() {
 
   // פונקציה למיון משחקים לפי ימים
   const getMatchesByDay = () => {
-    if (!matches || matches.length === 0) return {}
+    if (!matches || !Array.isArray(matches) || matches.length === 0) return {}
     
     const matchesByDay = {}
     const dayOrder = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת']

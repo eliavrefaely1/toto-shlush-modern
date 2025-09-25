@@ -115,6 +115,45 @@ export const POST = async (req) => {
       if (ADMIN_TOKEN && (!token || token !== ADMIN_TOKEN)) {
         return new Response(JSON.stringify({ ok: false, error: 'Unauthorized' }), { status: 401 })
       }
+    }
+    
+    if (action === 'clearAll') {
+      // ניקוי מלא של כל הנתונים
+      try {
+        // מחק את הטבלה הראשית
+        await kv.del(KEY)
+        
+        // מחק את הטבלאות המפוצלות
+        await kv.del(META_KEY)
+        await kv.del(USERS_KEY)
+        
+        // מחק טבלאות שבועות (1-10)
+        for (let w = 1; w <= 10; w++) {
+          await kv.del(MATCHES_KEY(w))
+          await kv.del(GUESSES_KEY(w))
+        }
+        
+        return new Response(JSON.stringify({ 
+          ok: true, 
+          message: 'כל הנתונים נמחקו בהצלחה'
+        }), { status: 200 })
+      } catch (err) {
+        return new Response(JSON.stringify({ 
+          ok: false, 
+          error: 'Failed to clear data' 
+        }), { status: 500 })
+      }
+    }
+    
+    if (action === 'cleanup') {
+      // ניקוי וסדור הטבלאות
+      const ADMIN_TOKEN = process.env.ADMIN_TOKEN || process.env.X_ADMIN_TOKEN
+      const token = req.headers.get('x-admin-token')
+      
+      // אבטחה: דרוש טוקן אדמין לניקוי
+      if (ADMIN_TOKEN && (!token || token !== ADMIN_TOKEN)) {
+        return new Response(JSON.stringify({ ok: false, error: 'Unauthorized' }), { status: 401 })
+      }
       
       const raw = (await kv.get(KEY)) || defaultData
       let cleaned = 0
@@ -271,41 +310,37 @@ export async function GET(request) {
     }
 
     const raw = (await kv.get(KEY)) || defaultData
-    // Optional filtering by week and fields to reduce payload
-    const weekParam = searchParams.get('week')
+    // תמיד שבוע 1
     const fieldsParam = searchParams.get('fields') || searchParams.get('only')
     const wanted = fieldsParam ? new Set(fieldsParam.split(',').map(s => s.trim())) : null
 
     let data = raw
     // Shallow clone before mutating
-    if (weekParam || wanted) {
+    if (wanted) {
       data = { ...raw }
     }
 
-    if (weekParam) {
-      const w = Number(weekParam)
-      if (!Number.isNaN(w)) {
-        // Try split-keys first for faster/smaller payload
-        const [wkMatches, wkGuesses] = await Promise.all([
-          kv.get(MATCHES_KEY(w)).catch(()=>null),
-          kv.get(GUESSES_KEY(w)).catch(()=>null)
-        ])
-        if (Array.isArray(wkMatches)) {
-          data.matches = wkMatches
-        } else if (Array.isArray(raw.matches)) {
-          data.matches = raw.matches.filter(m => Number(m.week) === w)
-        } else {
-          data.matches = []
-        }
+    // תמיד שבוע 1
+    const w = 1
+    // Try split-keys first for faster/smaller payload
+    const [wkMatches, wkGuesses] = await Promise.all([
+      kv.get(MATCHES_KEY(w)).catch(()=>null),
+      kv.get(GUESSES_KEY(w)).catch(()=>null)
+    ])
+    if (Array.isArray(wkMatches)) {
+      data.matches = wkMatches
+    } else if (Array.isArray(raw.matches)) {
+      data.matches = raw.matches.filter(m => Number(m.week) === w)
+    } else {
+      data.matches = []
+    }
 
-        if (Array.isArray(wkGuesses)) {
-          data.userGuesses = wkGuesses
-        } else if (Array.isArray(raw.userGuesses)) {
-          data.userGuesses = raw.userGuesses.filter(g => Number(g.week) === w)
-        } else {
-          data.userGuesses = []
-        }
-      }
+    if (Array.isArray(wkGuesses)) {
+      data.userGuesses = wkGuesses
+    } else if (Array.isArray(raw.userGuesses)) {
+      data.userGuesses = raw.userGuesses.filter(g => Number(g.week) === w)
+    } else {
+      data.userGuesses = []
     }
 
     if (wanted) {

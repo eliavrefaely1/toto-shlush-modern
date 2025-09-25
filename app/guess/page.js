@@ -18,9 +18,9 @@ export default function GuessPage() {
     // טעינת משחקים מהשרת
     (async () => {
       await dataManager.initialize()
-      const currentMatches = dataManager.getMatches()
+      const currentMatches = await dataManager.getMatches()
       setMatches(currentMatches)
-      const s = dataManager.getSettings()
+      const s = await dataManager.getSettings()
       setIsLocked(!!s.submissionsLocked)
     })()
   }, [])
@@ -45,7 +45,7 @@ export default function GuessPage() {
     e.preventDefault()
     // בדיקת מצב נעילה מהשרת ברגע השליחה
     await dataManager.initialize()
-    const sNow = dataManager.getSettings()
+    const sNow = await dataManager.getSettings()
     if (sNow.submissionsLocked) {
       setIsLocked(true)
       alert('ההגשה סגורה כרגע. נסו מאוחר יותר.')
@@ -68,7 +68,8 @@ export default function GuessPage() {
 
     try {
       // יצירת משתמש אם לא קיים
-      let user = dataManager.getUsers().find(u => (u.name||'').toLowerCase().trim() === formData.name.toLowerCase().trim())
+      let users = await dataManager.getUsers()
+      let user = users.find(u => (u.name||'').toLowerCase().trim() === formData.name.toLowerCase().trim())
       if (!user) {
         user = await dataManager.addUser({
           name: formData.name

@@ -17,7 +17,7 @@ export default function AdminPage() {
   const [toast, setToast] = useState(null);
   const [adminToken, setAdminToken] = useState('');
 
-  const [settings, setSettings] = useState({ currentWeek: 1, adminPassword: '1234', entryFee: 35, totoFirstPrize: 8000000, submissionsLocked: false });
+  const [settings, setSettings] = useState({ adminPassword: '1234', entryFee: 35, totoFirstPrize: 8000000, submissionsLocked: false });
   const [matches, setMatches] = useState([]);
   const [participants, setParticipants] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
@@ -104,7 +104,7 @@ export default function AdminPage() {
     if (confirm('האם אתה בטוח שברצונך למחוק את המשחק?')) {
       await dataManager.deleteMatch(matchId);
       await dataManager.initialize();
-      const updatedMatches = dataManager.getMatches(settings.currentWeek);
+      const updatedMatches = await dataManager.getMatches(settings.currentWeek);
       setMatches(updatedMatches);
       showToast('משחק נמחק');
     }
@@ -112,11 +112,11 @@ export default function AdminPage() {
 
   const clearAllMatches = async () => {
     if (confirm('האם אתה בטוח שברצונך למחוק את כל המשחקים?')) {
-      // Clear all matches for current week
-      await dataManager.clearAllMatches(settings.currentWeek);
+      // Clear all matches
+      await dataManager.clearAllMatches(1);
       
       // Update UI state
-      const updated = dataManager.getMatches(settings.currentWeek);
+      const updated = await dataManager.getMatches(1);
       setMatches(updated);
       
       // Also refresh all admin data to ensure everything is in sync
@@ -129,11 +129,11 @@ export default function AdminPage() {
   const loadAdminData = async () => {
     setIsLoading(true);
     try {
-      const currentSettings = dataManager.getSettings();
-      const currentMatches = dataManager.getMatches();
-      const currentParticipants = dataManager.getUsers();
+      const currentSettings = await dataManager.getSettings();
+      const currentMatches = await dataManager.getMatches();
+      const currentParticipants = await dataManager.getUsers();
       const currentLeaderboard = await dataManager.getLeaderboard();
-      const currentPot = dataManager.getPot();
+      const currentPot = await dataManager.getPot();
 
       // Debug: Check for duplicate user IDs
       const userIds = currentParticipants.map(u => u.id);
@@ -206,8 +206,8 @@ export default function AdminPage() {
     try {
       const parsedData = JSON.parse(jsonData);
       
-      // מחיקת משחקים קיימים לשבוע הנוכחי
-      await dataManager.clearAllMatches(settings.currentWeek);
+      // מחיקת משחקים קיימים
+      await dataManager.clearAllMatches(1);
       
       // יצירת משחקים חדשים
       const newMatches = [];
@@ -215,7 +215,7 @@ export default function AdminPage() {
         for (let index = 0; index < parsedData.rows.length; index++) {
           const row = parsedData.rows[index];
           const match = {
-            week: settings.currentWeek,
+            week: 1,
             homeTeam: row.teamA || row.homeTeam || `קבוצה בית ${index + 1}`,
             awayTeam: row.teamB || row.awayTeam || `קבוצה חוץ ${index + 1}`,
             result: row.result || '',
@@ -233,7 +233,7 @@ export default function AdminPage() {
         for (let index = 0; index < parsedData.length; index++) {
           const row = parsedData[index];
           const match = {
-            week: settings.currentWeek,
+            week: 1,
             homeTeam: row.teamA || row.homeTeam || `קבוצה בית ${index + 1}`,
             awayTeam: row.teamB || row.awayTeam || `קבוצה חוץ ${index + 1}`,
             result: row.result || '',
@@ -248,7 +248,7 @@ export default function AdminPage() {
         }
       }
       
-      setMatches(dataManager.getMatches(settings.currentWeek));
+      setMatches(await dataManager.getMatches(1));
       showToast(`נטענו ${newMatches.length} משחקים`);
     } catch (error) {
       console.error('Error uploading JSON:', error);
@@ -287,9 +287,6 @@ export default function AdminPage() {
     await dataManager.updateSettings(newSettings);
     // עדכן את ה-state מיד כדי שה-UI יתעדכן
     setSettings(prev => ({ ...prev, ...newSettings }));
-    if (newSettings.currentWeek && newSettings.currentWeek !== settings.currentWeek) {
-      await loadAdminData();
-    }
     showToast('הגדרות נשמרו בהצלחה');
   };
 
@@ -318,75 +315,29 @@ export default function AdminPage() {
     showToast(next ? 'הגשה ננעלה' : 'הגשה נפתחה');
   };
 
-  // מעבר מהיר בין שבועות
-  const applyWeekSwitch = async (newWeek) => {
-    try {
-      // שמור את השבוע הקודם כדי להחליט אם מדובר במעבר קדימה/אחורה
-      const prevWeek = Number(settings.currentWeek || dataManager.getSettings().currentWeek || 1)
-      // עדכן מיד את ה־UI לרספונסיביות
-      setSettings((prev) => ({ ...prev, currentWeek: newWeek }))
-
-      // ניקוי משחקים לשבוע היעד – אך ורק במעבר קדימה, ולא בעת חזרה לשבוע קודם
-      if (cleanNewWeekMatches && newWeek > prevWeek) {
-        const existing = dataManager.getMatches(newWeek) || []
-        if (existing.length === 0 || confirm(`לנקות ${existing.length} משחקים קיימים לשבוע ${newWeek} לפני ייבוא?`)) {
-          await dataManager.clearAllMatches(newWeek);
-        }
-      }
-      await dataManager.updateSettings({ currentWeek: newWeek });
-      await loadAdminData();
-      showToast(`עברנו לשבוע ${newWeek}`);
-      if (typeof window !== 'undefined') {
-        setTimeout(()=>window.location.reload(), 200);
-      }
-    } catch (_) {
-      showToast('שגיאה במעבר שבוע', 'error')
-    }
-  }
-
-  const switchToNextWeek = async () => {
-    const next = Number(settings.currentWeek || 1) + 1;
-    if (!confirm(`לעבור לשבוע ${next}?${cleanNewWeekMatches ? '\n(משחקי השבוע החדש ינוקו לפני ייבוא)' : ''}`)) return;
-    await applyWeekSwitch(next);
-  }
-
-  const switchToPrevWeek = async () => {
-    const prev = Math.max(1, Number(settings.currentWeek || 1) - 1);
-    if (prev === (settings.currentWeek||1)) return;
-    if (!confirm(`לעבור לשבוע ${prev}?`)) return;
-    await applyWeekSwitch(prev);
-  }
-
-  const switchToSpecificWeek = async () => {
-    const input = prompt('הזן מספר שבוע יעד', String((Number(settings.currentWeek||1))+1));
-    if (!input) return;
-    const target = parseInt(input, 10);
-    if (!Number.isFinite(target) || target < 1) { alert('מספר שבוע לא תקין'); return; }
-    if (!confirm(`לעבור לשבוע ${target}?${cleanNewWeekMatches ? '\n(משחקי השבוע החדש ינוקו לפני ייבוא)' : ''}`)) return;
-    await applyWeekSwitch(target);
-  }
+  // מערכת השבועות הוסרה - תמיד שבוע 1
 
   const deleteGuessesForUserCurrentWeek = async (userIdOrName) => {
-    if (confirm('למחוק את הניחוש של המשתתף לשבוע הנוכחי?')) {
-      await dataManager.deleteUserGuessesByUserAndWeek(userIdOrName, settings.currentWeek);
+    if (confirm('למחוק את הניחוש של המשתתף?')) {
+      await dataManager.deleteUserGuessesByUserAndWeek(userIdOrName, 1);
       // רענון מלא של נתוני האדמין כדי לשקף את המחיקה מיד
       await dataManager.calculateScores();
       await loadAdminData();
-      showToast('ניחוש המשתתף לשבוע נמחק');
+      showToast('ניחוש המשתתף נמחק');
     }
   };
 
   const clearAllGuessesForCurrentWeek = async () => {
-    if (confirm('האם אתה בטוח שברצונך למחוק את כל הניחושים לשבוע הנוכחי?')) {
-      await dataManager.clearAllGuesses(settings.currentWeek);
+    if (confirm('האם אתה בטוח שברצונך למחוק את כל הניחושים?')) {
+      await dataManager.clearAllGuesses(1);
       await dataManager.calculateScores();
       await loadAdminData();
-      showToast('כל ניחושי השבוע נמחקו');
+      showToast('כל הניחושים נמחקו');
     }
   };
 
   const deleteGuessById = async (guessId) => {
-    if (confirm('למחוק את הניחוש לשבוע הנוכחי?')) {
+    if (confirm('למחוק את הניחוש?')) {
       await dataManager.deleteUserGuess(guessId);
       await dataManager.calculateScores();
       await loadAdminData();
@@ -516,7 +467,7 @@ export default function AdminPage() {
   };
 
   // בדיקה שהניחוש עדיין קיים לפני פתיחת המודל
-  const handleEditGuessClick = (user, guess) => {
+  const handleEditGuessClick = async (user, guess) => {
     // בדיקה שההגשה לא נעולה
     if (settings.submissionsLocked) {
       showToast('לא ניתן לערוך ניחושים כאשר ההגשה נעולה', 'error');
@@ -524,8 +475,8 @@ export default function AdminPage() {
     }
     
     // בדיקה שהניחוש עדיין קיים במערכת
-    const currentGuesses = dataManager.getUserGuesses(settings.currentWeek);
-    const stillExists = currentGuesses.find(g => g.id === guess.id);
+      const currentGuesses = await dataManager.getUserGuesses(1);
+      const stillExists = currentGuesses.find(g => g.id === guess.id);
     
     if (!stillExists) {
       showToast('הניחוש נמחק - מרענן נתונים', 'error');
@@ -537,7 +488,7 @@ export default function AdminPage() {
   };
 
   const createDefaultMatches = async () => {
-    const newMatches = await dataManager.createDefaultMatches(settings.currentWeek);
+    const newMatches = await dataManager.createDefaultMatches(1);
     setMatches(newMatches);
     showToast(`${newMatches.length} משחקים נוצרו`);
   };
@@ -718,7 +669,7 @@ export default function AdminPage() {
             {/* רשימת משחקים */}
             <div className="card">
               <div className="card-header">
-                <h2 className="text-xl font-bold text-blue-800">משחקי שבוע {settings.currentWeek}</h2>
+                <h2 className="text-xl font-bold text-blue-800">משחקים</h2>
                 <p className="text-gray-600">{matches.length} משחקים</p>
               </div>
               <div className="card-content">
@@ -822,9 +773,9 @@ export default function AdminPage() {
                           לאחר הזנת כל התוצאות, הניקוד יחושב אוטומטית לכל המשתתפים
                         </p>
                         <button 
-                          onClick={() => {
+                          onClick={async () => {
                             dataManager.calculateScores();
-                            setLeaderboard(dataManager.getLeaderboard());
+                            setLeaderboard(await dataManager.getLeaderboard());
                             showToast('ניקוד חושב בהצלחה!');
                           }}
                           className="btn btn-primary mt-2"
@@ -880,7 +831,6 @@ export default function AdminPage() {
           </div>
         )}
         {activeTab === 'participants' && (() => {
-          const guessesThisWeek = dataManager.getUserGuesses(settings.currentWeek);
           const participantsWithGuess = guessesThisWeek.map(g => ({
             guess: g,
             user: participants.find(p => p.id === g.userId) || { id: g.userId, name: g.name, phone: g.phone, createdAt: g.createdAt }
@@ -920,9 +870,9 @@ export default function AdminPage() {
             {/* טבלת דירוג לשבוע הנוכחי (כמו היום) */}
             <div className="card">
               <div className="card-header">
-                <h2 className="text-xl font-bold text-blue-800">משתתפים — שבוע {settings.currentWeek}</h2>
+                <h2 className="text-xl font-bold text-blue-800">משתתפים</h2>
                 <div className="flex items-center justify-between flex-wrap gap-2">
-                  <p className="text-gray-600">{participantsWithGuess.length} משתתפים עם ניחוש לשבוע זה</p>
+                  <p className="text-gray-600">{participantsWithGuess.length} משתתפים עם ניחוש</p>
                   <div className="flex items-center gap-2">
                     <label className="text-sm text-gray-600">מיין לפי:</label>
                     <select value={sortWeek} onChange={(e)=>setSortWeek(e.target.value)} className="input w-44 text-sm">
@@ -933,7 +883,7 @@ export default function AdminPage() {
                     </select>
                   </div>
                   <button onClick={clearAllGuessesForCurrentWeek} className="btn btn-danger flex items-center gap-2">
-                    <Trash2 className="w-4 h-4" /> מחק את כל ניחושי השבוע
+                    <Trash2 className="w-4 h-4" /> מחק את כל הניחושים
                   </button>
                 </div>
               </div>
@@ -947,7 +897,7 @@ export default function AdminPage() {
                   <>
                     {/* סיכום תשלומים - רק למשתתפים השבועיים */}
                     <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-                      <h4 className="font-bold text-gray-800 mb-3">סיכום תשלומים - שבוע {settings.currentWeek}</h4>
+                      <h4 className="font-bold text-gray-800 mb-3">סיכום תשלומים</h4>
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="text-center">
                           <div className="text-2xl font-bold text-green-600">
@@ -978,7 +928,7 @@ export default function AdminPage() {
                             <p className="text-sm text-gray-500">
                               הצטרף: {new Date(user.createdAt).toLocaleDateString('he-IL')}
                             </p>
-                            <div className="mt-2 text-xs text-blue-600">ניחוש קיים לשבוע {settings.currentWeek}</div>
+                            <div className="mt-2 text-xs text-blue-600">ניחוש קיים</div>
                           </div>
                           <div className="flex items-center gap-4">
                             {/* צ'ק בוקס תשלום - רק למשתתפים השבועיים */}
@@ -1009,7 +959,7 @@ export default function AdminPage() {
                                   <Edit className="w-4 h-4" /> ערוך ניחוש
                                 </button>
                                 <button onClick={() => deleteGuessById(guess.id)} className="btn btn-danger flex items-center gap-2">
-                                  <Trash2 className="w-4 h-4" /> מחק ניחוש לשבוע
+                                  <Trash2 className="w-4 h-4" /> מחק ניחוש
                                 </button>
                               </div>
                             </div>
@@ -1026,7 +976,6 @@ export default function AdminPage() {
           );
         })()}
         {activeTab === 'users' && (() => {
-          const guessesThisWeek = dataManager.getUserGuesses(settings.currentWeek);
           const byUserId = new Map(guessesThisWeek.map(g => [g.userId, g]))
           const scoreById = new Map(leaderboard.map(l => [l.userId, l.score]))
           const scoreByName = new Map(leaderboard.map(l => [String(l.name||'').toLowerCase().trim(), l.score]))
@@ -1080,9 +1029,9 @@ export default function AdminPage() {
                             <div className="font-bold text-blue-800">{u.name}</div>
                             <div className="text-xs text-gray-500">הצטרף: {new Date(u.createdAt).toLocaleDateString('he-IL')}</div>
                             {g ? (
-                              <div className="text-xs text-green-700 mt-1">יש ניחוש לשבוע {settings.currentWeek}</div>
+                              <div className="text-xs text-green-700 mt-1">יש ניחוש</div>
                             ) : (
-                              <div className="text-xs text-gray-500 mt-1">אין ניחוש לשבוע {settings.currentWeek}</div>
+                              <div className="text-xs text-gray-500 mt-1">אין ניחוש</div>
                             )}
                           </div>
                           <div className="text-right">
@@ -1116,27 +1065,7 @@ export default function AdminPage() {
               </div>
               <div className="card-content">
                 <div className="space-y-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      שבוע נוכחי
-                    </label>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <input
-                        type="number"
-                        value={settings.currentWeek}
-                        onChange={(e) => updateSettings({ currentWeek: parseInt(e.target.value) })}
-                        className="input w-32"
-                        min="1"
-                      />
-                      <button onClick={switchToPrevWeek} className="btn btn-secondary">‹ שבוע קודם</button>
-                      <button onClick={switchToNextWeek} className="btn btn-secondary">שבוע הבא ›</button>
-                      <button onClick={switchToSpecificWeek} className="btn btn-primary">מעבר לשבוע...</button>
-                    </div>
-                    <div className="flex items-center gap-2 mt-2">
-                      <input id="cleanNewW" type="checkbox" checked={cleanNewWeekMatches} onChange={(e)=>setCleanNewWeekMatches(e.target.checked)} />
-                      <label htmlFor="cleanNewW" className="text-sm text-gray-600">נקה משחקים לשבוע היעד לפני ייבוא (רק במעבר קדימה)</label>
-                    </div>
-                  </div>
+                  {/* מערכת השבועות הוסרה - תמיד שבוע 1 */}
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">

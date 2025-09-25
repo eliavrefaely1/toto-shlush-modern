@@ -1,8 +1,6 @@
-// מערכת ניהול נתונים עם שרת בלבד
+// מערכת ניהול נתונים עם DB ישירות
 class DataManager {
   constructor() {
-    this.data = this.getDefaultData();
-    this._syncTimer = null;
     this._isInitialized = false;
   }
 
@@ -22,15 +20,13 @@ class DataManager {
     return `u_${Math.abs(h).toString(36)}`;
   }
 
-  // טעינת נתונים מהשרת בלבד
+  // טעינת נתונים מהשרת בלבד - ללא שמירה מקומית
   async loadDataFromServer() {
     try {
       const response = await fetch('/api/data', { cache: 'no-store' });
       if (response.ok) {
         const serverData = await response.json();
-        this.data = { ...this.getDefaultData(), ...serverData };
-        this.normalizeData();
-        return this.data;
+        return { ...this.getDefaultData(), ...serverData };
       }
     } catch (error) {
       console.error('Failed to load data from server:', error);
@@ -38,8 +34,8 @@ class DataManager {
     return this.getDefaultData();
   }
 
-  // שמירה בשרת בלבד
-  async saveDataToServer(options = {}) {
+  // שמירה בשרת בלבד - ללא שמירה מקומית
+  async saveDataToServer(dataToSave, options = {}) {
     try {
       const response = await fetch('/api/data', {
         method: 'PUT',
@@ -47,14 +43,10 @@ class DataManager {
           'Content-Type': 'application/json',
           ...(options.headers || {})
         },
-        body: JSON.stringify(this.data)
+        body: JSON.stringify(dataToSave)
       });
       
       if (response.ok) {
-        // נקה דגלי מחיקה לאחר שמירה מוצלחת
-        this.data.deletedWeeks = [];
-        this.data.deletedGuessKeys = [];
-        this.data.deletedUsers = [];
         return true;
       }
     } catch (error) {
@@ -159,7 +151,6 @@ class DataManager {
 
   getDefaultData() {
     return {
-      currentWeek: 1,
       adminPassword: '1234',
       entryFee: 35,
       totoFirstPrize: 8000000,
@@ -197,7 +188,7 @@ class DataManager {
       
       if (options.preferLocalSettings) {
         // כאשר פעולת אדמין משנה הגדרות – עדיף הערכים המקומיים
-        merged.currentWeek = this.data.currentWeek
+        // currentWeek מוסר - תמיד שבוע 1
         if (typeof this.data.entryFee !== 'undefined') merged.entryFee = this.data.entryFee
         if (typeof this.data.totoFirstPrize !== 'undefined') merged.totoFirstPrize = this.data.totoFirstPrize
         if (typeof this.data.adminPassword !== 'undefined') merged.adminPassword = this.data.adminPassword
@@ -233,7 +224,7 @@ class DataManager {
     const merged = { ...server }
 
     // הגדרות — השרת הוא מקור אמת כדי שכל המכשירים יראו אותו הדבר
-    merged.currentWeek = (server.currentWeek ?? local.currentWeek ?? 1)
+    // currentWeek מוסר - תמיד שבוע 1
     merged.adminPassword = server.adminPassword || local.adminPassword || '1234'
     merged.entryFee = (server.entryFee ?? local.entryFee ?? 35)
     merged.submissionsLocked = (server.submissionsLocked ?? local.submissionsLocked ?? false)
@@ -371,17 +362,18 @@ class DataManager {
   }
 
   // ניהול משחקים
-  getMatches(week = null) {
-    const targetWeek = (week ?? this.data.currentWeek);
-    const targetNum = Number(targetWeek);
-    const matches = this.data.matches.filter(match => Number(match.week) === targetNum);
+  async getMatches(week = null) {
+    // תמיד שבוע 1 - טעינה ישירה מהשרת
+    const targetNum = 1;
+    const data = await this.loadDataFromServer();
+    const matches = (data.matches || []).filter(match => Number(match.week) === targetNum);
     return matches;
   }
 
   async addMatch(match) {
     const newMatch = {
       id: match.id || this.generateId(),
-      week: match.week || this.data.currentWeek,
+      week: 1,
       homeTeam: match.homeTeam,
       awayTeam: match.awayTeam,
       // אל תקבע ברירת מחדל של היום — אם אין תאריך בקלט, השאר ריק
@@ -392,49 +384,48 @@ class DataManager {
       updatedAt: match.updatedAt || new Date().toISOString(),
       ...match
     };
-    this.data.matches.push(newMatch);
-    await this.saveDataToServer();
+    
+    // טען נתונים מהשרת
+    const data = await this.loadDataFromServer();
+    data.matches.push(newMatch);
+    await this.saveDataToServer(data);
     return newMatch;
   }
 
   async updateMatch(matchId, updates) {
-    const matchIndex = this.data.matches.findIndex(m => m.id === matchId);
+    const data = await this.loadDataFromServer();
+    const matchIndex = data.matches.findIndex(m => m.id === matchId);
     if (matchIndex !== -1) {
-      this.data.matches[matchIndex] = { ...this.data.matches[matchIndex], ...updates, updatedAt: new Date().toISOString() };
-      await this.saveDataToServer();
-      return this.data.matches[matchIndex];
+      data.matches[matchIndex] = { ...data.matches[matchIndex], ...updates, updatedAt: new Date().toISOString() };
+      await this.saveDataToServer(data);
+      return data.matches[matchIndex];
     }
     return null;
   }
 
   async deleteMatch(matchId) {
-    this.data.matches = this.data.matches.filter(m => m.id !== matchId);
-    await this.saveDataToServer();
+    const data = await this.loadDataFromServer();
+    data.matches = data.matches.filter(m => m.id !== matchId);
+    await this.saveDataToServer(data);
   }
 
   async clearAllMatches(week = null) {
-    if (week !== null && week !== undefined) {
-      const w = Number(week);
-      this.data.matches = this.data.matches.filter(m => Number(m.week) !== w);
-      if (!this.data.deletedWeeks.includes(w)) this.data.deletedWeeks.push(w);
-    } else {
-      this.data.matches = [];
-      const weeks = new Set([
-        ...this.data.userGuesses.map(g => Number(g.week)),
-        ...this.data.matches.map(m => Number(m.week))
-      ]);
-      this.data.deletedWeeks = Array.from(weeks);
-    }
-    await this.saveDataToServer();
+    // תמיד שבוע 1
+    const w = 1;
+    const data = await this.loadDataFromServer();
+    data.matches = data.matches.filter(m => Number(m.week) !== w);
+    await this.saveDataToServer(data);
   }
 
   // ניהול משתמשים
-  getUsers() {
-    return this.data.users;
+  async getUsers() {
+    const data = await this.loadDataFromServer();
+    return data.users || [];
   }
 
   async addUser(user) {
-    const existing = (this.data.users || []).find(u => (u.name || '').toLowerCase().trim() === (user.name || '').toLowerCase().trim())
+    const data = await this.loadDataFromServer();
+    const existing = (data.users || []).find(u => (u.name || '').toLowerCase().trim() === (user.name || '').toLowerCase().trim())
     if (existing) return existing;
     const newUser = {
       id: this.generateUserIdFromName(user.name),
@@ -446,32 +437,39 @@ class DataManager {
       // ודא שאפילו אם user מכיל paymentStatus, הוא יהיה 'unpaid'
       paymentStatus: 'unpaid'
     };
-    this.data.users.push(newUser);
-    await this.saveDataToServer();
+    data.users.push(newUser);
+    await this.saveDataToServer(data);
     return newUser;
   }
 
-  getUserById(userId) {
-    return this.data.users.find(u => u.id === userId);
+  getUserById(userId, data = null) {
+    if (data) {
+      return data.users.find(u => u.id === userId);
+    }
+    // אם לא קיבלנו נתונים, נחזיר null
+    return null;
   }
 
   // עדכון סטטוס תשלום
   async updateUserPaymentStatus(userId, paymentStatus) {
-    const userIndex = this.data.users.findIndex(u => u.id === userId);
+    const data = await this.loadDataFromServer();
+    const userIndex = data.users.findIndex(u => u.id === userId);
     if (userIndex !== -1) {
       const now = new Date().toISOString();
-      this.data.users[userIndex].paymentStatus = paymentStatus;
-      this.data.users[userIndex].updatedAt = now;
-      await this.saveDataToServer();
-      return this.data.users[userIndex];
+      data.users[userIndex].paymentStatus = paymentStatus;
+      data.users[userIndex].updatedAt = now;
+      await this.saveDataToServer(data);
+      return data.users[userIndex];
     }
     return null;
   }
 
   // שינוי שם משתמש
   async renameUser(oldName, newName) {
+    const data = await this.loadDataFromServer();
+    
     // בדיקה שהשם החדש לא קיים
-    const existingUser = this.data.users.find(u => 
+    const existingUser = data.users.find(u => 
       u.name.toLowerCase().trim() === newName.toLowerCase().trim()
     );
     if (existingUser) {
@@ -479,7 +477,7 @@ class DataManager {
     }
     
     // מצא את המשתמש הישן
-    const user = this.data.users.find(u => 
+    const user = data.users.find(u => 
       u.name.toLowerCase().trim() === oldName.toLowerCase().trim()
     );
     if (!user) {
@@ -492,7 +490,7 @@ class DataManager {
     user.updatedAt = new Date().toISOString();
     
     // עדכן את כל הניחושים
-    this.data.userGuesses = this.data.userGuesses.map(g => {
+    data.userGuesses = (data.userGuesses || []).map(g => {
       if (g.name === oldNameValue) {
         return { ...g, name: newName, updatedAt: new Date().toISOString() };
       }
@@ -500,32 +498,33 @@ class DataManager {
     });
     
     // שמור בשרת
-    await this.saveDataToServer();
+    await this.saveDataToServer(data);
     
     return user;
   }
 
   // מחיקת משתמש וכל הניחושים שלו בכל השבועות
   async deleteUser(userIdOrName) {
-    const beforeUsers = this.data.users.length;
+    const data = await this.loadDataFromServer();
+    const beforeUsers = data.users.length;
     let target = null;
     let nameLower = '';
     let idStr = '';
     if (typeof userIdOrName === 'string') {
       idStr = userIdOrName;
-      target = this.getUserById(userIdOrName);
+      target = this.getUserById(userIdOrName, data);
       if (!target) {
         // נסה כשם
         nameLower = userIdOrName.toLowerCase().trim();
-        target = (this.data.users || []).find(u => (u.name||'').toLowerCase().trim() === nameLower) || null;
+        target = (data.users || []).find(u => (u.name||'').toLowerCase().trim() === nameLower) || null;
       }
     } else if (userIdOrName && userIdOrName.id) {
-      target = this.getUserById(userIdOrName.id) || userIdOrName;
+      target = this.getUserById(userIdOrName.id, data) || userIdOrName;
     }
 
     if (!target) {
       // נסה לאתר לפי רשומת ניחוש קיימת
-      const g = (this.data.userGuesses || []).find(gg => gg.userId === idStr || (String(gg.name||'').toLowerCase().trim() === (nameLower || '').toLowerCase()))
+      const g = (data.userGuesses || []).find(gg => gg.userId === idStr || (String(gg.name||'').toLowerCase().trim() === (nameLower || '').toLowerCase()))
       if (g) {
         nameLower = String(g.name || '').toLowerCase().trim();
         target = { id: g.userId, name: g.name };
@@ -537,34 +536,35 @@ class DataManager {
     nameLower = nameLower || String(target.name || '').toLowerCase().trim();
 
     // הסר את המשתמש מרשימת המשתמשים
-    this.data.users = (this.data.users || []).filter(u => u.id !== target.id && (String(u.name||'').toLowerCase().trim() !== nameLower));
+    data.users = (data.users || []).filter(u => u.id !== target.id && (String(u.name||'').toLowerCase().trim() !== nameLower));
 
     // רשום מחיקה כדי שתגבר במיזוג מול השרת
     if (nameLower) {
-      if (!Array.isArray(this.data.deletedUsers)) this.data.deletedUsers = []
-      if (!this.data.deletedUsers.includes(nameLower)) this.data.deletedUsers.push(nameLower)
+      if (!Array.isArray(data.deletedUsers)) data.deletedUsers = []
+      if (!data.deletedUsers.includes(nameLower)) data.deletedUsers.push(nameLower)
     }
 
     // סמן ומחק את כל הניחושים של המשתמש בכל השבועות
-    (this.data.userGuesses || []).forEach(g => {
+    (data.userGuesses || []).forEach(g => {
       if (g.userId === target.id || (String(g.name||'').toLowerCase().trim() === nameLower)) {
         const key = `${(g.name||'').toLowerCase().trim()}__${g.week}`
-        if (!this.data.deletedGuessKeys.includes(key)) this.data.deletedGuessKeys.push(key)
+        if (!data.deletedGuessKeys.includes(key)) data.deletedGuessKeys.push(key)
       }
     })
-    const beforeGuesses = (this.data.userGuesses || []).length;
-    this.data.userGuesses = (this.data.userGuesses || []).filter(g => !(g.userId === target.id || (String(g.name||'').toLowerCase().trim() === nameLower)));
-    const guessesRemoved = beforeGuesses - this.data.userGuesses.length;
+    const beforeGuesses = (data.userGuesses || []).length;
+    data.userGuesses = (data.userGuesses || []).filter(g => !(g.userId === target.id || (String(g.name||'').toLowerCase().trim() === nameLower)));
+    const guessesRemoved = beforeGuesses - data.userGuesses.length;
 
-    await this.saveDataToServer();
-    return { usersRemoved: beforeUsers - this.data.users.length, guessesRemoved };
+    await this.saveDataToServer(data);
+    return { usersRemoved: beforeUsers - data.users.length, guessesRemoved };
   }
 
   // ניהול ניחושים
-  getUserGuesses(week = null) {
-    const targetWeek = (week ?? this.data.currentWeek);
-    const w = Number(targetWeek);
-    return this.data.userGuesses.filter(guess => Number(guess.week) === w);
+  async getUserGuesses(week = null) {
+    // תמיד שבוע 1 - טעינה ישירה מהשרת
+    const w = 1;
+    const data = await this.loadDataFromServer();
+    return (data.userGuesses || []).filter(guess => Number(guess.week) === w);
   }
 
   async addUserGuess(guess) {
@@ -572,7 +572,7 @@ class DataManager {
       id: Date.now().toString(),
       userId: guess.userId,
       name: guess.name,
-      week: guess.week || this.data.currentWeek,
+      week: 1,
       guesses: guess.guesses || Array(16).fill(''),
       score: 0,
       paymentStatus: 'unpaid', // מצב שולם לכל ניחוש בנפרד
@@ -581,64 +581,71 @@ class DataManager {
       ...guess
     };
 
+    // טען נתונים מהשרת
+    const data = await this.loadDataFromServer();
+    
     // מחיקת ניחוש קודם אם קיים
-    this.data.userGuesses = this.data.userGuesses.filter(
+    data.userGuesses = (data.userGuesses || []).filter(
       g => !(
         (g.userId === newGuess.userId || (g.name||'').toLowerCase().trim() === (newGuess.name||'').toLowerCase().trim())
         && g.week === newGuess.week
       )
     );
 
-    this.data.userGuesses.push(newGuess);
-    await this.saveDataToServer();
+    data.userGuesses.push(newGuess);
+    await this.saveDataToServer(data);
     return newGuess;
   }
 
   async updateUserGuess(guessId, updates) {
-    const guessIndex = this.data.userGuesses.findIndex(g => g.id === guessId);
+    const data = await this.loadDataFromServer();
+    const guessIndex = data.userGuesses.findIndex(g => g.id === guessId);
     if (guessIndex !== -1) {
-      this.data.userGuesses[guessIndex] = { ...this.data.userGuesses[guessIndex], ...updates, updatedAt: new Date().toISOString() };
-      await this.saveDataToServer();
-      return this.data.userGuesses[guessIndex];
+      data.userGuesses[guessIndex] = { ...data.userGuesses[guessIndex], ...updates, updatedAt: new Date().toISOString() };
+      await this.saveDataToServer(data);
+      return data.userGuesses[guessIndex];
     }
     return null;
   }
 
   // עדכון סטטוס תשלום לניחוש ספציפי
   async updateGuessPaymentStatus(guessId, paymentStatus) {
-    const guessIndex = this.data.userGuesses.findIndex(g => g.id === guessId);
+    const data = await this.loadDataFromServer();
+    const guessIndex = data.userGuesses.findIndex(g => g.id === guessId);
     if (guessIndex !== -1) {
       const now = new Date().toISOString();
-      this.data.userGuesses[guessIndex].paymentStatus = paymentStatus;
-      this.data.userGuesses[guessIndex].updatedAt = now;
-      await this.saveDataToServer();
-      return this.data.userGuesses[guessIndex];
+      data.userGuesses[guessIndex].paymentStatus = paymentStatus;
+      data.userGuesses[guessIndex].updatedAt = now;
+      await this.saveDataToServer(data);
+      return data.userGuesses[guessIndex];
     }
     return null;
   }
 
   // מחיקת ניחושים
   async deleteUserGuess(guessId) {
-    const before = this.data.userGuesses.length;
-    const toDelete = this.data.userGuesses.find(g => g.id === guessId)
+    const data = await this.loadDataFromServer();
+    const before = data.userGuesses.length;
+    const toDelete = data.userGuesses.find(g => g.id === guessId)
     if (toDelete) {
       const key = `${(toDelete.name||'').toLowerCase().trim()}__${toDelete.week}`
-      if (!this.data.deletedGuessKeys.includes(key)) this.data.deletedGuessKeys.push(key)
+      if (!data.deletedGuessKeys.includes(key)) data.deletedGuessKeys.push(key)
     }
-    this.data.userGuesses = this.data.userGuesses.filter(g => g.id !== guessId);
-    const after = this.data.userGuesses.length;
-    if (after !== before) await this.saveDataToServer();
+    data.userGuesses = data.userGuesses.filter(g => g.id !== guessId);
+    const after = data.userGuesses.length;
+    if (after !== before) await this.saveDataToServer(data);
     return before - after;
   }
 
   async deleteUserGuessesByUserAndWeek(userIdOrName, week = null) {
-    const targetWeek = (week ?? this.data.currentWeek);
-    const w = Number(targetWeek);
-    const before = this.data.userGuesses.length;
+    // תמיד שבוע 1
+    const w = 1;
+    const data = await this.loadDataFromServer();
+    const before = data.userGuesses.length;
 
     // תמיכה גם במחיקה לפי שם (ליישור לאיחוד החדש לפי name)
     let nameLower = '';
-    const candidate = this.getUserById(userIdOrName);
+    const candidate = this.getUserById(userIdOrName, data);
     if (candidate && candidate.name) {
       nameLower = String(candidate.name).toLowerCase().trim();
     } else if (typeof userIdOrName === 'string') {
@@ -648,40 +655,32 @@ class DataManager {
 
     if (nameLower) {
       const key = `${nameLower}__${w}`
-      if (!this.data.deletedGuessKeys.includes(key)) this.data.deletedGuessKeys.push(key)
+      if (!data.deletedGuessKeys.includes(key)) data.deletedGuessKeys.push(key)
     }
 
-    this.data.userGuesses = this.data.userGuesses.filter(g => {
+    data.userGuesses = data.userGuesses.filter(g => {
       const sameUser = (g.userId === userIdOrName) || (String(g.name || '').toLowerCase().trim() === nameLower);
       const sameWeek = Number(g.week) === w;
       return !(sameUser && sameWeek);
     });
 
-    const after = this.data.userGuesses.length;
-    if (after !== before) await this.saveDataToServer();
+    const after = data.userGuesses.length;
+    if (after !== before) await this.saveDataToServer(data);
     return before - after;
   }
 
   async clearAllGuesses(week = null) {
     const before = this.data.userGuesses.length;
-    if (week !== null && week !== undefined) {
-      const w = Number(week);
-      // סמן את כל מפתחות השבוע למחיקה
-      (this.data.userGuesses || []).forEach(g => {
-        if (Number(g.week) === w) {
-          const key = `${(g.name||'').toLowerCase().trim()}__${w}`
-          if (!this.data.deletedGuessKeys.includes(key)) this.data.deletedGuessKeys.push(key)
-        }
-      })
-      this.data.userGuesses = this.data.userGuesses.filter(g => Number(g.week) !== w);
-    } else {
-      // מחיקה מוחלטת — סמן את כל המפתחות
-      (this.data.userGuesses || []).forEach(g => {
-        const key = `${(g.name||'').toLowerCase().trim()}__${g.week}`
+    // תמיד שבוע 1
+    const w = 1;
+    // סמן את כל מפתחות השבוע למחיקה
+    (this.data.userGuesses || []).forEach(g => {
+      if (Number(g.week) === w) {
+        const key = `${(g.name||'').toLowerCase().trim()}__${w}`
         if (!this.data.deletedGuessKeys.includes(key)) this.data.deletedGuessKeys.push(key)
-      })
-      this.data.userGuesses = [];
-    }
+      }
+    })
+    this.data.userGuesses = this.data.userGuesses.filter(g => Number(g.week) !== w);
     const after = this.data.userGuesses.length;
     if (after !== before) await this.saveDataToServer();
     return before - after;
@@ -689,9 +688,9 @@ class DataManager {
 
   // חישוב ניקוד
   async calculateScores(week = null) {
-    const targetWeek = (week ?? this.data.currentWeek);
-    const matches = this.getMatches(targetWeek);
-    const guesses = this.getUserGuesses(targetWeek);
+    // תמיד שבוע 1
+    const matches = this.getMatches(1);
+    const guesses = this.getUserGuesses(1);
 
     for (const guess of guesses) {
       let score = 0;
@@ -718,15 +717,15 @@ class DataManager {
   }
 
   // ניהול קופה
-  getPot(week = null) {
-    const targetWeek = (week ?? this.data.currentWeek);
-    const guesses = this.getUserGuesses(targetWeek);
+  async getPot(week = null) {
+    // תמיד שבוע 1 - טעינה ישירה מהשרת
+    const guesses = await this.getUserGuesses(1);
+    const data = await this.loadDataFromServer();
     const numOfPlayers = guesses.length;
-    const amountPerPlayer = this.data.entryFee;
+    const amountPerPlayer = data.entryFee || 35;
     const totalAmount = numOfPlayers * amountPerPlayer;
 
     return {
-      week: targetWeek,
       numOfPlayers,
       amountPerPlayer,
       totalAmount
@@ -734,53 +733,55 @@ class DataManager {
   }
 
   // הגדרות
-  getSettings() {
+  async getSettings() {
+    const data = await this.loadDataFromServer();
     return {
-      currentWeek: this.data.currentWeek,
-      adminPassword: this.data.adminPassword,
-      entryFee: this.data.entryFee,
-      totoFirstPrize: this.data.totoFirstPrize || 8000000,
-      submissionsLocked: !!this.data.submissionsLocked,
-      countdownActive: !!this.data.countdownActive,
-      countdownTarget: this.data.countdownTarget || ''
+      adminPassword: data.adminPassword || '1234',
+      entryFee: data.entryFee || 35,
+      totoFirstPrize: data.totoFirstPrize || 8000000,
+      submissionsLocked: !!data.submissionsLocked,
+      countdownActive: !!data.countdownActive,
+      countdownTarget: data.countdownTarget || ''
     };
   }
 
   async updateSettings(settings) {
-    if (Object.prototype.hasOwnProperty.call(settings, 'currentWeek')) {
-      this.data.currentWeek = settings.currentWeek;
-    }
+    // currentWeek מוסר - תמיד שבוע 1
+    const data = await this.loadDataFromServer();
+    
     if (Object.prototype.hasOwnProperty.call(settings, 'adminPassword')) {
-      this.data.adminPassword = settings.adminPassword;
+      data.adminPassword = settings.adminPassword;
     }
     if (Object.prototype.hasOwnProperty.call(settings, 'entryFee')) {
-      this.data.entryFee = settings.entryFee;
+      data.entryFee = settings.entryFee;
     }
     if (Object.prototype.hasOwnProperty.call(settings, 'totoFirstPrize')) {
-      this.data.totoFirstPrize = settings.totoFirstPrize;
+      data.totoFirstPrize = settings.totoFirstPrize;
     }
     if (Object.prototype.hasOwnProperty.call(settings, 'submissionsLocked')) {
-      this.data.submissionsLocked = !!settings.submissionsLocked;
+      data.submissionsLocked = !!settings.submissionsLocked;
     }
     if (Object.prototype.hasOwnProperty.call(settings, 'countdownActive')) {
-      this.data.countdownActive = !!settings.countdownActive;
+      data.countdownActive = !!settings.countdownActive;
     }
     if (Object.prototype.hasOwnProperty.call(settings, 'countdownTarget')) {
-      this.data.countdownTarget = settings.countdownTarget;
+      data.countdownTarget = settings.countdownTarget;
     }
     // שמור בשרת
-    await this.saveDataToServer();
+    await this.saveDataToServer(data);
   }
 
   // אימות מנהל
-  authenticateAdmin(password) {
-    return password === this.data.adminPassword;
+  async authenticateAdmin(password) {
+    const data = await this.loadDataFromServer();
+    return password === data.adminPassword;
   }
 
   // יצירת 16 משחקים ברירת מחדל
   async createDefaultMatches(week = null) {
-    const targetWeek = week || this.data.currentWeek;
-    const existingMatches = this.getMatches(targetWeek);
+    // תמיד שבוע 1
+    const targetWeek = 1;
+    const existingMatches = await this.getMatches(targetWeek);
 
     if (existingMatches.length >= 16) {
       for (let index = 0; index < existingMatches.length; index++) {
@@ -792,7 +793,7 @@ class DataManager {
           await this.updateMatch(match.id, match);
         }
       }
-      const updatedMatches = this.getMatches(targetWeek);
+      const updatedMatches = await this.getMatches(targetWeek);
       return updatedMatches;
     }
 
@@ -818,7 +819,8 @@ class DataManager {
 
   // קבלת דירוג
   async getLeaderboard(week = null) {
-    const guesses = await this.calculateScores(week);
+    // תמיד שבוע 1
+    const guesses = await this.calculateScores(1);
     return guesses
       .map(guess => {
         const user = this.getUserById(guess.userId);

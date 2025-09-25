@@ -11,16 +11,8 @@ const GUESSES_KEY = (w) => `toto:week:${w}:guesses:v1`
 
 export async function GET(request) {
   try {
-    const { searchParams } = new URL(request.url)
-    let w = Number(searchParams.get('week'))
-    if (!w || Number.isNaN(w)) {
-      const meta = await kv.get(META_KEY).catch(()=>null)
-      if (meta && meta.currentWeek) w = Number(meta.currentWeek)
-    }
-    if (!w || Number.isNaN(w)) {
-      const raw = await kv.get(KEY).catch(()=>null)
-      w = Number(raw?.currentWeek || 1)
-    }
+    // תמיד שבוע 1
+    const w = 1
 
     const [users, wkMatches, wkGuesses, raw] = await Promise.all([
       kv.get(USERS_KEY).catch(()=>null),
@@ -57,9 +49,9 @@ export async function GET(request) {
       }
     }).sort((a,b)=>b.score - a.score)
 
-    return Response.json({ week: w, count: leaderboard.length, leaderboard }, { headers: { 'Cache-Control': 'no-store' } })
+    return Response.json({ count: leaderboard.length, leaderboard }, { headers: { 'Cache-Control': 'no-store' } })
   } catch (err) {
-    return Response.json({ week: null, leaderboard: [] }, { headers: { 'Cache-Control': 'no-store' } })
+    return Response.json({ leaderboard: [] }, { headers: { 'Cache-Control': 'no-store' } })
   }
 }
 
