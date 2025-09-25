@@ -951,19 +951,19 @@ export default function AdminPage() {
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="text-center">
                           <div className="text-2xl font-bold text-green-600">
-                            {participantsWithGuess.filter(({ user }) => (user.paymentStatus || 'unpaid') === 'paid').length}
+                            {participantsWithGuess.filter(({ guess }) => (guess.paymentStatus || 'unpaid') === 'paid').length}
                           </div>
                           <div className="text-sm text-gray-600">שילמו</div>
                         </div>
                         <div className="text-center">
                           <div className="text-2xl font-bold text-red-600">
-                            {participantsWithGuess.filter(({ user }) => (user.paymentStatus || 'unpaid') === 'unpaid').length}
+                            {participantsWithGuess.filter(({ guess }) => (guess.paymentStatus || 'unpaid') === 'unpaid').length}
                           </div>
                           <div className="text-sm text-gray-600">לא שילמו</div>
                         </div>
                         <div className="text-center">
                           <div className="text-2xl font-bold text-blue-600">
-                            ₪{participantsWithGuess.filter(({ user }) => (user.paymentStatus || 'unpaid') === 'paid').length * settings.entryFee}
+                            ₪{participantsWithGuess.filter(({ guess }) => (guess.paymentStatus || 'unpaid') === 'paid').length * settings.entryFee}
                           </div>
                           <div className="text-sm text-gray-600">סכום שנאסף</div>
                         </div>
