@@ -456,11 +456,11 @@ export default function LeaderboardPage() {
                             {entry.user?.name || entry.name}
                             {/* חיווי תשלום */}
                             <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                              (entry.user?.paymentStatus || entry.paymentStatus) === 'paid' 
+                              (entry.user?.paymentStatus || entry.paymentStatus || 'unpaid') === 'paid' 
                                 ? 'bg-green-100 text-green-800' 
                                 : 'bg-red-100 text-red-800'
                             }`}>
-                              {(entry.user?.paymentStatus || entry.paymentStatus) === 'paid' ? '✓ שולם' : '✗ לא שולם'}
+                              {(entry.user?.paymentStatus || entry.paymentStatus || 'unpaid') === 'paid' ? '✓ שולם' : '✗ לא שולם'}
                             </span>
                           </div>
                           <div className="text-xs text-gray-500">{entry.user?.phone || entry.phone}</div>

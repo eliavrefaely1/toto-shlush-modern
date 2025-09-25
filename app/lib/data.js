@@ -434,9 +434,11 @@ class DataManager {
       id: this.generateUserIdFromName(user.name),
       name: user.name,
       isAdmin: user.isAdmin || false,
-      paymentStatus: user.paymentStatus || 'unpaid', // 'paid' | 'unpaid'
+      paymentStatus: 'unpaid', // תמיד התחל עם 'unpaid' למשתמש חדש
       createdAt: new Date().toISOString(),
-      ...user
+      ...user,
+      // ודא שאפילו אם user מכיל paymentStatus, הוא יהיה 'unpaid'
+      paymentStatus: 'unpaid'
     };
     this.data.users.push(newUser);
     await this.saveDataToServer();

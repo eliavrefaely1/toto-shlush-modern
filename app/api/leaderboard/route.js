@@ -43,16 +43,16 @@ export async function GET(request) {
         if (results[i] && g.guesses?.[i] === results[i]) score++
       }
       const u = byId.get(g.userId)
-      
+      const finalPaymentStatus = u?.paymentStatus || 'unpaid';
       
       return {
         id: g.id,
         userId: g.userId,
         name: u?.name || g.name,
         phone: u?.phone || g.phone,
-        paymentStatus: u?.paymentStatus || 'unpaid',
+        paymentStatus: finalPaymentStatus,
         score,
-        user: u || { name: g.name, phone: g.phone, paymentStatus: 'unpaid' }
+        user: u || { name: g.name, phone: g.phone, paymentStatus: finalPaymentStatus }
       }
     }).sort((a,b)=>b.score - a.score)
 
