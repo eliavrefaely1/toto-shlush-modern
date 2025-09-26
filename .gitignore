@@ -78,3 +78,7 @@ jspm_packages/
 
 # Sentry Config File
 .env.sentry-build-plugin
+
+#resend
+RESEND_API_KEY=re_Q3cGgD38_NJn8wo9pCRxVH9R8VUssP2aY
+ADMIN_EMAIL=eliavrefaely1@gmail.com

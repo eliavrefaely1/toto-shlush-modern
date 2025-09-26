@@ -739,7 +739,8 @@ class DataManager {
       totoFirstPrize: this.data.totoFirstPrize || 8000000,
       submissionsLocked: !!this.data.submissionsLocked,
       countdownActive: !!this.data.countdownActive,
-      countdownTarget: this.data.countdownTarget || ''
+      countdownTarget: this.data.countdownTarget || '',
+      adminEmail: this.data.adminEmail || ''
     };
   }
 
@@ -763,6 +764,9 @@ class DataManager {
     }
     if (Object.prototype.hasOwnProperty.call(settings, 'countdownTarget')) {
       data.countdownTarget = settings.countdownTarget;
+    }
+    if (Object.prototype.hasOwnProperty.call(settings, 'adminEmail')) {
+      data.adminEmail = settings.adminEmail;
     }
     // שמור בשרת
     await this.saveDataToServer(data);

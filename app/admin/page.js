@@ -17,7 +17,8 @@ export default function AdminPage() {
   const [toast, setToast] = useState(null);
   const [adminToken, setAdminToken] = useState('');
 
-  const [settings, setSettings] = useState({ adminPassword: '1234', entryFee: 35, totoFirstPrize: 8000000, submissionsLocked: false });
+  const [settings, setSettings] = useState({ adminPassword: '1234', entryFee: 35, totoFirstPrize: 8000000, submissionsLocked: false, adminEmail: '' });
+  const [tempAdminEmail, setTempAdminEmail] = useState('');
   const [matches, setMatches] = useState([]);
   const [participants, setParticipants] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
@@ -100,6 +101,107 @@ export default function AdminPage() {
     }
   }
 
+  const sendBackupToEmail = async () => {
+    const emailToUse = settings.adminEmail || tempAdminEmail;
+    if (!emailToUse) {
+      showToast('אנא הגדר כתובת מייל בהגדרות המערכת', 'error');
+      return;
+    }
+
+    if (!confirm(`האם לשלוח גיבוי למייל ${emailToUse}?`)) {
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      // בדיקה ראשונית של שירות המייל
+      const testEmailResponse = await fetch('/api/send-email', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          to: emailToUse,
+          subject: 'בדיקת שירות מייל - טוטו שלוש',
+          message: 'זוהי הודעת בדיקה. אם אתה רואה את זה, שירות המייל עובד!'
+        })
+      });
+
+      const testResult = await testEmailResponse.json();
+      if (!testResult.success) {
+        throw new Error(`שירות המייל לא מוגדר: ${testResult.error}`);
+      }
+
+      // יצירת גיבוי
+      const backupResponse = await fetch('/api/backup?action=create');
+      const backupResult = await backupResponse.json();
+      
+      if (!backupResult.success) {
+        throw new Error(backupResult.error);
+      }
+
+      // שליחת המייל עם הגיבוי
+      const emailResponse = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          backupData: backupResult,
+          recipientEmail: emailToUse
+        })
+      });
+
+      const emailResult = await emailResponse.json();
+      
+      if (emailResult.success) {
+        showToast('גיבוי נשלח בהצלחה למייל!');
+      } else {
+        throw new Error(emailResult.error);
+      }
+    } catch (error) {
+      console.error('Error sending backup email:', error);
+      showToast(`שגיאה בשליחת הגיבוי: ${error.message}`, 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  const testEmailService = async () => {
+    const emailToUse = settings.adminEmail || tempAdminEmail;
+    if (!emailToUse) {
+      showToast('אנא הגדר כתובת מייל בהגדרות המערכת', 'error');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const testEmailResponse = await fetch('/api/send-email', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          to: emailToUse,
+          subject: 'בדיקת שירות מייל - טוטו שלוש',
+          message: 'זוהי הודעת בדיקה. אם אתה רואה את זה, שירות המייל עובד!'
+        })
+      });
+
+      const testResult = await testEmailResponse.json();
+      
+      if (testResult.success) {
+        showToast('שירות המייל עובד! בדוק את תיבת המייל שלך.');
+      } else {
+        showToast(`שירות המייל לא עובד: ${testResult.error}`, 'error');
+      }
+    } catch (error) {
+      console.error('Error testing email service:', error);
+      showToast(`שגיאה בבדיקת שירות המייל: ${error.message}`, 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  }
 
   const deleteMatch = async (matchId) => {
     if (confirm('האם אתה בטוח שברצונך למחוק את המשחק?')) {
@@ -159,6 +261,7 @@ export default function AdminPage() {
       }
 
       setSettings(currentSettings);
+      setTempAdminEmail(currentSettings.adminEmail || '');
       setMatches(currentMatches);
       setGuessesThisWeek(currentGuesses);
       setLeaderboard(currentLeaderboard);
@@ -294,10 +397,15 @@ export default function AdminPage() {
   };
 
   const updateSettings = async (newSettings) => {
-    await dataManager.updateSettings(newSettings);
-    // עדכן את ה-state מיד כדי שה-UI יתעדכן
-    setSettings(prev => ({ ...prev, ...newSettings }));
-    showToast('הגדרות נשמרו בהצלחה');
+    try {
+      await dataManager.updateSettings(newSettings);
+      // עדכן את ה-state מיד כדי שה-UI יתעדכן
+      setSettings(prev => ({ ...prev, ...newSettings }));
+      showToast('הגדרות נשמרו בהצלחה');
+    } catch (error) {
+      console.error('Error updating settings:', error);
+      showToast('שגיאה בשמירת ההגדרות', 'error');
+    }
   };
 
   const debouncedUpdateSettings = (newSettings) => {
@@ -610,6 +718,12 @@ export default function AdminPage() {
           </button>
           <button onClick={() => router.push('/backup-manager')} className="btn bg-green-600 hover:bg-green-700 text-white flex items-center gap-2">
             <Shield className="w-4 h-4" /> מנהל גיבויים
+          </button>
+          <button onClick={sendBackupToEmail} disabled={isLoading} className="btn bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2 disabled:opacity-50">
+            <Shield className="w-4 h-4" /> שלח גיבוי למייל
+          </button>
+          <button onClick={testEmailService} disabled={isLoading} className="btn bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-2 disabled:opacity-50">
+            <Shield className="w-4 h-4" /> בדוק שירות מייל
           </button>
           <button onClick={resetLocalCache} className="btn btn-danger flex items-center gap-2">אפס קאש מקומי</button>
         </div>
@@ -1108,6 +1222,40 @@ export default function AdminPage() {
                       min="1"
                       placeholder="8000000"
                     />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      כתובת מייל לגיבויים (אופציונלי)
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="email"
+                        value={tempAdminEmail}
+                        onChange={(e) => setTempAdminEmail(e.target.value)}
+                        className="input flex-1"
+                        placeholder="admin@example.com"
+                      />
+                      <button
+                        onClick={() => updateSettings({ adminEmail: tempAdminEmail })}
+                        className="btn btn-primary px-4 py-2"
+                        disabled={tempAdminEmail === (settings.adminEmail || '')}
+                      >
+                        שמור
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      גיבויים יישלחו אוטומטית לכתובת זו
+                    </p>
+                    <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                      <p className="text-sm text-yellow-800 font-medium mb-1">הגדרת שירות מייל:</p>
+                      <ul className="text-xs text-yellow-700 space-y-1">
+                        <li>• צור חשבון ב-<a href="https://resend.com" target="_blank" className="underline">Resend.com</a></li>
+                        <li>• קבל API Key</li>
+                        <li>• הוסף RESEND_API_KEY למשתני הסביבה</li>
+                        <li>• לחץ "בדוק שירות מייל" לוודא שהכל עובד</li>
+                      </ul>
+                    </div>
                   </div>
                   
                   <div>

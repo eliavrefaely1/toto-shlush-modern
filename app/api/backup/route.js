@@ -1,7 +1,5 @@
 import { kv } from '@vercel/kv'
 import { NextResponse } from 'next/server'
-import fs from 'fs'
-import path from 'path'
 
 // Ensure fresh responses
 export const dynamic = 'force-dynamic'
@@ -14,27 +12,15 @@ const USERS_KEY = 'toto:users:v1'
 const MATCHES_KEY = (w) => `toto:week:${w}:matches:v1`
 const GUESSES_KEY = (w) => `toto:week:${w}:guesses:v1`
 
-// נתיב תיקיית הגיבויים
-const BACKUP_DIR = path.join(process.cwd(), 'backups')
-
-// וודא שתיקיית הגיבויים קיימת
-const ensureBackupDir = () => {
-  if (!fs.existsSync(BACKUP_DIR)) {
-    fs.mkdirSync(BACKUP_DIR, { recursive: true })
-  }
-}
+// מפתחות גיבויים
+const BACKUP_LIST_KEY = 'toto:backups:list'
+const BACKUP_KEY = (timestamp) => `toto:backup:${timestamp}`
 
 // יצירת גיבוי מלא
 const createFullBackup = async () => {
   try {
-    ensureBackupDir()
-    
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-    const backupDir = path.join(BACKUP_DIR, `backup-${timestamp}`)
-    
-    if (!fs.existsSync(backupDir)) {
-      fs.mkdirSync(backupDir, { recursive: true })
-    }
+    const timestamp = new Date().toISOString()
+    const backupId = timestamp.replace(/[:.]/g, '-')
 
     // קבלת כל הנתונים
     const [mainData, metaData, usersData] = await Promise.all([
@@ -43,62 +29,87 @@ const createFullBackup = async () => {
       kv.get(USERS_KEY).catch(() => null)
     ])
 
-    // קבלת נתונים לפי שבועות (1-10)
+    // קבלת נתונים לפי שבועות (רק שבוע 1 עכשיו)
     const weekData = {}
-    for (let week = 1; week <= 10; week++) {
-      const [matches, guesses] = await Promise.all([
-        kv.get(MATCHES_KEY(week)).catch(() => null),
-        kv.get(GUESSES_KEY(week)).catch(() => null)
-      ])
-      
-      if (matches || guesses) {
-        weekData[week] = { matches, guesses }
-      }
+    const [matches, guesses] = await Promise.all([
+      kv.get(MATCHES_KEY(1)).catch(() => null),
+      kv.get(GUESSES_KEY(1)).catch(() => null)
+    ])
+    
+    if (matches || guesses) {
+      weekData[1] = { matches, guesses }
     }
 
-    // שמירת קבצי הגיבוי
+    // שמירת הגיבוי ב-KV
     const backupData = {
-      timestamp: new Date().toISOString(),
+      timestamp,
+      backupId,
       mainData,
       metaData,
       usersData,
       weekData,
-      version: '1.0'
+      version: '2.0',
+      created: new Date().toISOString()
     }
 
-    const backupFile = path.join(backupDir, 'full-backup.json')
-    fs.writeFileSync(backupFile, JSON.stringify(backupData, null, 2))
+    // שמירת הגיבוי
+    await kv.set(BACKUP_KEY(backupId), backupData)
 
-    // יצירת קובץ README עם פרטי הגיבוי
-    const readmeContent = `# גיבוי נתונים - ${timestamp}
+    // עדכון רשימת הגיבויים
+    const backupList = await kv.get(BACKUP_LIST_KEY) || []
+    const newBackupInfo = {
+      id: backupId,
+      timestamp,
+      created: new Date().toISOString(),
+      size: JSON.stringify(backupData).length,
+      files: {
+        mainData: !!mainData,
+        metaData: !!metaData,
+        usersData: !!usersData,
+        weeks: Object.keys(weekData).length
+      }
+    }
+    
+    // הוסף לתחילת הרשימה
+    backupList.unshift(newBackupInfo)
+    
+    // שמור רק 50 הגיבויים האחרונים
+    const trimmedList = backupList.slice(0, 50)
+    await kv.set(BACKUP_LIST_KEY, trimmedList)
 
-## פרטי הגיבוי:
-- תאריך: ${new Date().toLocaleString('he-IL')}
-- גרסה: 1.0
-- סוג: גיבוי מלא
-
-## תוכן הגיבוי:
-- נתונים ראשיים: ${mainData ? '✓' : '✗'}
-- נתוני מטא: ${metaData ? '✓' : '✗'}
-- נתוני משתמשים: ${usersData ? '✓' : '✗'}
-- נתוני שבועות: ${Object.keys(weekData).length} שבועות
-
-## איך לשחזר:
-1. השתמש ב-API endpoint: POST /api/backup עם action: 'restore'
-2. העלה את קובץ full-backup.json
-3. הנתונים יוחזרו אוטומטית
-
-## הערות:
-- גיבוי זה נוצר אוטומטית על ידי מערכת הגיבויים
-- שמור על קבצי הגיבוי במקום בטוח
-- בדוק תקינות הנתונים לאחר שחזור
-`
-
-    fs.writeFileSync(path.join(backupDir, 'README.md'), readmeContent)
+    // שליחת מייל אוטומטית (אם מוגדר)
+    const adminEmail = process.env.ADMIN_EMAIL || metaData?.adminEmail
+    if (adminEmail) {
+      try {
+        const baseUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3001'
+        const emailResponse = await fetch(`${baseUrl}/api/send-email`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            backupData: {
+              ...backupData,
+              files: newBackupInfo.files
+            },
+            recipientEmail: adminEmail
+          })
+        })
+        
+        if (emailResponse.ok) {
+          console.log('Backup email sent successfully to:', adminEmail)
+        } else {
+          console.error('Failed to send backup email:', await emailResponse.text())
+        }
+      } catch (emailError) {
+        console.error('Error sending backup email:', emailError)
+        // לא נכשל את הגיבוי בגלל שגיאת מייל
+      }
+    }
 
     return {
       success: true,
-      backupPath: backupDir,
+      backupId,
       timestamp,
       files: {
         mainData: !!mainData,
@@ -117,8 +128,17 @@ const createFullBackup = async () => {
 }
 
 // שחזור נתונים מגיבוי
-const restoreFromBackup = async (backupData) => {
+const restoreFromBackup = async (backupId) => {
   try {
+    // טעינת נתוני הגיבוי
+    const backupData = await kv.get(BACKUP_KEY(backupId))
+    if (!backupData) {
+      return {
+        success: false,
+        error: 'Backup not found'
+      }
+    }
+
     const { mainData, metaData, usersData, weekData } = backupData
 
     // שחזור נתונים ראשיים
@@ -168,43 +188,13 @@ const restoreFromBackup = async (backupData) => {
 }
 
 // רשימת גיבויים קיימים
-const listBackups = () => {
+const listBackups = async () => {
   try {
-    ensureBackupDir()
+    const backupList = await kv.get(BACKUP_LIST_KEY) || []
     
-    const backups = fs.readdirSync(BACKUP_DIR, { withFileTypes: true })
-      .filter(dirent => dirent.isDirectory() && dirent.name.startsWith('backup-'))
-      .map(dirent => {
-        const backupPath = path.join(BACKUP_DIR, dirent.name)
-        const stats = fs.statSync(backupPath)
-        const readmePath = path.join(backupPath, 'README.md')
-        
-        let info = {
-          name: dirent.name,
-          timestamp: dirent.name.replace('backup-', '').replace(/-/g, ':'),
-          created: stats.birthtime,
-          size: 0
-        }
-
-        // חישוב גודל התיקייה
-        try {
-          const files = fs.readdirSync(backupPath)
-          info.size = files.reduce((total, file) => {
-            const filePath = path.join(backupPath, file)
-            const fileStats = fs.statSync(filePath)
-            return total + fileStats.size
-          }, 0)
-        } catch (e) {
-          // ignore
-        }
-
-        return info
-      })
-      .sort((a, b) => new Date(b.created) - new Date(a.created))
-
     return {
       success: true,
-      backups
+      backups: backupList
     }
   } catch (error) {
     console.error('Error listing backups:', error)
@@ -216,22 +206,19 @@ const listBackups = () => {
 }
 
 // מחיקת גיבוי ישן
-const deleteBackup = (backupName) => {
+const deleteBackup = async (backupId) => {
   try {
-    const backupPath = path.join(BACKUP_DIR, backupName)
+    // מחיקת הגיבוי מ-KV
+    await kv.del(BACKUP_KEY(backupId))
     
-    if (!fs.existsSync(backupPath)) {
-      return {
-        success: false,
-        error: 'Backup not found'
-      }
-    }
-
-    fs.rmSync(backupPath, { recursive: true, force: true })
+    // עדכון רשימת הגיבויים
+    const backupList = await kv.get(BACKUP_LIST_KEY) || []
+    const updatedList = backupList.filter(backup => backup.id !== backupId)
+    await kv.set(BACKUP_LIST_KEY, updatedList)
 
     return {
       success: true,
-      message: `Backup ${backupName} deleted successfully`
+      message: `Backup ${backupId} deleted successfully`
     }
   } catch (error) {
     console.error('Error deleting backup:', error)
@@ -249,7 +236,8 @@ export async function GET(request) {
 
     switch (action) {
       case 'list':
-        return NextResponse.json(listBackups())
+        const listResult = await listBackups()
+        return NextResponse.json(listResult)
       
       case 'create':
         const result = await createFullBackup()
@@ -271,7 +259,7 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
-    const { action, backupName, backupData } = await request.json()
+    const { action, backupId } = await request.json()
     const ADMIN_TOKEN = process.env.ADMIN_TOKEN || process.env.X_ADMIN_TOKEN
     const token = request.headers.get('x-admin-token')
 
@@ -285,25 +273,25 @@ export async function POST(request) {
 
     switch (action) {
       case 'restore':
-        if (!backupData) {
+        if (!backupId) {
           return NextResponse.json({
             success: false,
-            error: 'Backup data is required for restore'
+            error: 'Backup ID is required for restore'
           }, { status: 400 })
         }
         
-        const restoreResult = await restoreFromBackup(backupData)
+        const restoreResult = await restoreFromBackup(backupId)
         return NextResponse.json(restoreResult)
       
       case 'delete':
-        if (!backupName) {
+        if (!backupId) {
           return NextResponse.json({
             success: false,
-            error: 'Backup name is required for delete'
+            error: 'Backup ID is required for delete'
           }, { status: 400 })
         }
         
-        const deleteResult = deleteBackup(backupName)
+        const deleteResult = await deleteBackup(backupId)
         return NextResponse.json(deleteResult)
       
       case 'create':

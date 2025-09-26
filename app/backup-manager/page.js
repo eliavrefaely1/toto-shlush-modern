@@ -52,8 +52,8 @@ export default function BackupManager() {
   }
 
   // מחיקת גיבוי
-  const deleteBackup = async (backupName) => {
-    if (!confirm(`האם אתה בטוח שברצונך למחוק את הגיבוי "${backupName}"?`)) {
+  const deleteBackup = async (backupId) => {
+    if (!confirm(`האם אתה בטוח שברצונך למחוק את הגיבוי?`)) {
       return
     }
 
@@ -69,13 +69,13 @@ export default function BackupManager() {
         },
         body: JSON.stringify({
           action: 'delete',
-          backupName
+          backupId
         })
       })
       const result = await response.json()
       
       if (result.success) {
-        setMessage(`גיבוי נמחק בהצלחה: ${backupName}`)
+        setMessage(`גיבוי נמחק בהצלחה`)
         loadBackups() // רענון הרשימה
       } else {
         setMessage(`שגיאה במחיקת גיבוי: ${result.error}`)
@@ -88,8 +88,8 @@ export default function BackupManager() {
   }
 
   // שחזור מגיבוי
-  const restoreBackup = async (backupName) => {
-    if (!confirm(`האם אתה בטוח שברצונך לשחזר מגיבוי "${backupName}"? פעולה זו תחליף את כל הנתונים הנוכחיים!`)) {
+  const restoreBackup = async (backupId) => {
+    if (!confirm(`האם אתה בטוח שברצונך לשחזר מגיבוי? פעולה זו תחליף את כל הנתונים הנוכחיים!`)) {
       return
     }
 
@@ -97,9 +97,25 @@ export default function BackupManager() {
       setLoading(true)
       setMessage('משחזר מגיבוי...')
       
-      // כאן צריך לטעון את קובץ הגיבוי ולהעביר אותו ל-API
-      // לצורך הדגמה, נשתמש בנתונים דמה
-      setMessage('פונקציית שחזור דורשת העלאת קובץ גיבוי. השתמש ב-API ישירות.')
+      const response = await fetch('/api/backup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-token': prompt('הזן טוקן אדמין:') || ''
+        },
+        body: JSON.stringify({
+          action: 'restore',
+          backupId
+        })
+      })
+      const result = await response.json()
+      
+      if (result.success) {
+        setMessage(`גיבוי שוחזר בהצלחה`)
+        loadBackups() // רענון הרשימה
+      } else {
+        setMessage(`שגיאה בשחזור: ${result.error}`)
+      }
     } catch (error) {
       setMessage(`שגיאה בשחזור: ${error.message}`)
     } finally {
@@ -184,7 +200,7 @@ export default function BackupManager() {
                     <div className="flex justify-between items-start">
                       <div className="flex-1">
                         <h3 className="font-semibold text-gray-900">
-                          {backup.name}
+                          גיבוי {index + 1}
                         </h3>
                         <p className="text-sm text-gray-600 mt-1">
                           נוצר: {formatDate(backup.created)}
@@ -193,13 +209,18 @@ export default function BackupManager() {
                           גודל: {formatFileSize(backup.size)}
                         </p>
                         <p className="text-xs text-gray-500 mt-1">
-                          {backup.timestamp}
+                          ID: {backup.id}
                         </p>
+                        {backup.files && (
+                          <div className="text-xs text-gray-500 mt-1">
+                            נתונים: {backup.files.mainData ? '✓' : '✗'} ראשי, {backup.files.usersData ? '✓' : '✗'} משתמשים, {backup.files.weeks} שבועות
+                          </div>
+                        )}
                       </div>
                       
                       <div className="flex gap-2">
                         <button
-                          onClick={() => restoreBackup(backup.name)}
+                          onClick={() => restoreBackup(backup.id)}
                           disabled={loading}
                           className="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 disabled:opacity-50"
                         >
@@ -207,7 +228,7 @@ export default function BackupManager() {
                         </button>
                         
                         <button
-                          onClick={() => deleteBackup(backup.name)}
+                          onClick={() => deleteBackup(backup.id)}
                           disabled={loading}
                           className="bg-red-600 text-white px-4 py-2 rounded text-sm hover:bg-red-700 disabled:opacity-50"
                         >
@@ -227,8 +248,8 @@ export default function BackupManager() {
             <ul className="text-sm text-blue-800 space-y-1">
               <li>• גיבויים נוצרים אוטומטית כל 5 דקות לאחר שינויים במערכת</li>
               <li>• ניתן ליצור גיבוי ידני בכל עת באמצעות הכפתור "צור גיבוי חדש"</li>
-              <li>• לשחזור מגיבוי, השתמש ב-API ישירות או העלה קובץ גיבוי</li>
-              <li>• מומלץ לשמור גיבויים במקום בטוח מחוץ לשרת</li>
+              <li>• הגיבויים נשמרים ב-KV וזמינים גם בפרודקשן</li>
+              <li>• המערכת שומרת עד 50 גיבויים אחרונים</li>
               <li>• בדוק תקינות הנתונים לאחר כל שחזור</li>
             </ul>
           </div>
