@@ -162,7 +162,7 @@ export default function GuessPage() {
           {/* פרטים אישיים */}
           <div className="card mb-6">
             <div className="card-header">
-                  <h2 className="text-xl font-bold text-blue-800">פרטים אישיים</h2>
+                  <h2 className="text-xl font-bold text-blue-800 ">פרטים אישיים</h2>
             </div>
             <div className="card-content">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -185,7 +185,7 @@ export default function GuessPage() {
           <div className="card mb-6">
             <div className="card-header">
               <h2 className="text-xl font-bold text-blue-800">ניחושים</h2>
-              <p className="text-gray-600">משחק {currentMatchIndex + 1} מתוך 16</p>
+              <p className="text-gray-700 text-right text-lg font-bold">משחק {currentMatchIndex + 1} מתוך 16</p>
             </div>
             <div className="card-content">
               {matches.length > 0 && (
@@ -193,11 +193,18 @@ export default function GuessPage() {
                   {/* משחק נוכחי */}
                   <div className="text-center">
                     <div className="bg-gray-50 rounded-lg p-6 mb-6">
-                      <h3 className="text-lg font-bold text-gray-800 mb-4">
+                      {/* <h3 className="text-2xl font-bold text-gray-700 mb-4 text-center">
                         משחק {currentMatchIndex + 1}
-                      </h3>
-                      <div className="text-2xl font-bold text-green-700 mb-4">
-                        {matches[currentMatchIndex]?.homeTeam} vs {matches[currentMatchIndex]?.awayTeam}
+                      </h3> */}
+                      <div className="text-sm font-bold text-gray-600 mb-2 text-center">
+                        <span>{matches[currentMatchIndex]?.league}</span>
+                        <br />
+                        <span>יום {matches[currentMatchIndex]?.day}</span> 
+                        <span> - </span> 
+                        <span>{matches[currentMatchIndex]?.time}</span> 
+                      </div>
+                      <div className="text-xl font-bold text-blue-900 mb-6 text-center">
+                        {matches[currentMatchIndex]?.homeTeam} VS {matches[currentMatchIndex]?.awayTeam}
                       </div>
                       
                       <div className="flex justify-center gap-4">

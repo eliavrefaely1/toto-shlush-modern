@@ -22,6 +22,7 @@ export default function AdminPage() {
   const [participants, setParticipants] = useState([]);
   const [leaderboard, setLeaderboard] = useState([]);
   const [pot, setPot] = useState({ totalAmount: 0, numOfPlayers: 0 });
+  const [guessesThisWeek, setGuessesThisWeek] = useState([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   // מיון
   const [sortWeek, setSortWeek] = useState('score_desc'); // score_desc | score_asc | name_asc | name_desc
@@ -104,7 +105,7 @@ export default function AdminPage() {
     if (confirm('האם אתה בטוח שברצונך למחוק את המשחק?')) {
       await dataManager.deleteMatch(matchId);
       await dataManager.initialize();
-      const updatedMatches = await dataManager.getMatches(settings.currentWeek);
+      const updatedMatches = await dataManager.getMatches();
       setMatches(updatedMatches);
       showToast('משחק נמחק');
     }
@@ -113,10 +114,10 @@ export default function AdminPage() {
   const clearAllMatches = async () => {
     if (confirm('האם אתה בטוח שברצונך למחוק את כל המשחקים?')) {
       // Clear all matches
-      await dataManager.clearAllMatches(1);
+      await dataManager.clearAllMatches();
       
       // Update UI state
-      const updated = await dataManager.getMatches(1);
+      const updated = await dataManager.getMatches();
       setMatches(updated);
       
       // Also refresh all admin data to ensure everything is in sync
@@ -129,11 +130,19 @@ export default function AdminPage() {
   const loadAdminData = async () => {
     setIsLoading(true);
     try {
+      console.log('Loading admin data...');
       const currentSettings = await dataManager.getSettings();
+      console.log('Settings loaded:', currentSettings);
       const currentMatches = await dataManager.getMatches();
+      console.log('Matches loaded:', currentMatches);
       const currentParticipants = await dataManager.getUsers();
+      console.log('Participants loaded:', currentParticipants);
+      const currentGuesses = await dataManager.getUserGuesses();
+      console.log('Guesses loaded:', currentGuesses);
       const currentLeaderboard = await dataManager.getLeaderboard();
+      console.log('Leaderboard loaded:', currentLeaderboard);
       const currentPot = await dataManager.getPot();
+      console.log('Pot loaded:', currentPot);
 
       // Debug: Check for duplicate user IDs
       const userIds = currentParticipants.map(u => u.id);
@@ -151,6 +160,7 @@ export default function AdminPage() {
 
       setSettings(currentSettings);
       setMatches(currentMatches);
+      setGuessesThisWeek(currentGuesses);
       setLeaderboard(currentLeaderboard);
       setPot(currentPot);
       // init countdown controls
@@ -207,7 +217,7 @@ export default function AdminPage() {
       const parsedData = JSON.parse(jsonData);
       
       // מחיקת משחקים קיימים
-      await dataManager.clearAllMatches(1);
+      await dataManager.clearAllMatches();
       
       // יצירת משחקים חדשים
       const newMatches = [];
@@ -248,7 +258,7 @@ export default function AdminPage() {
         }
       }
       
-      setMatches(await dataManager.getMatches(1));
+      setMatches(await dataManager.getMatches());
       showToast(`נטענו ${newMatches.length} משחקים`);
     } catch (error) {
       console.error('Error uploading JSON:', error);
@@ -315,11 +325,11 @@ export default function AdminPage() {
     showToast(next ? 'הגשה ננעלה' : 'הגשה נפתחה');
   };
 
-  // מערכת השבועות הוסרה - תמיד שבוע 1
+  // מערכת השבועות הוסרה - משחק אחד בלבד
 
   const deleteGuessesForUserCurrentWeek = async (userIdOrName) => {
     if (confirm('למחוק את הניחוש של המשתתף?')) {
-      await dataManager.deleteUserGuessesByUserAndWeek(userIdOrName, 1);
+      await dataManager.deleteUserGuessesByUser(userIdOrName);
       // רענון מלא של נתוני האדמין כדי לשקף את המחיקה מיד
       await dataManager.calculateScores();
       await loadAdminData();
@@ -329,7 +339,7 @@ export default function AdminPage() {
 
   const clearAllGuessesForCurrentWeek = async () => {
     if (confirm('האם אתה בטוח שברצונך למחוק את כל הניחושים?')) {
-      await dataManager.clearAllGuesses(1);
+      await dataManager.clearAllGuesses();
       await dataManager.calculateScores();
       await loadAdminData();
       showToast('כל הניחושים נמחקו');
@@ -475,7 +485,7 @@ export default function AdminPage() {
     }
     
     // בדיקה שהניחוש עדיין קיים במערכת
-      const currentGuesses = await dataManager.getUserGuesses(1);
+      const currentGuesses = await dataManager.getUserGuesses();
       const stillExists = currentGuesses.find(g => g.id === guess.id);
     
     if (!stillExists) {
@@ -488,7 +498,7 @@ export default function AdminPage() {
   };
 
   const createDefaultMatches = async () => {
-    const newMatches = await dataManager.createDefaultMatches(1);
+    const newMatches = await dataManager.createDefaultMatches();
     setMatches(newMatches);
     showToast(`${newMatches.length} משחקים נוצרו`);
   };
@@ -597,6 +607,9 @@ export default function AdminPage() {
           </button>
           <button onClick={refreshAll} disabled={isRefreshing} className="btn btn-secondary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
             <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} /> {isRefreshing ? 'מרענן...' : 'רענן נתונים'}
+          </button>
+          <button onClick={() => router.push('/backup-manager')} className="btn bg-green-600 hover:bg-green-700 text-white flex items-center gap-2">
+            <Shield className="w-4 h-4" /> מנהל גיבויים
           </button>
           <button onClick={resetLocalCache} className="btn btn-danger flex items-center gap-2">אפס קאש מקומי</button>
         </div>
@@ -1065,7 +1078,7 @@ export default function AdminPage() {
               </div>
               <div className="card-content">
                 <div className="space-y-6">
-                  {/* מערכת השבועות הוסרה - תמיד שבוע 1 */}
+                  {/* מערכת השבועות הוסרה - משחק אחד בלבד */}
                   
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">

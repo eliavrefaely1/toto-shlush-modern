@@ -11,18 +11,15 @@ const GUESSES_KEY = (w) => `toto:week:${w}:guesses:v1`
 
 export async function GET(request) {
   try {
-    // תמיד שבוע 1
-    const w = 1
-
     const [users, wkMatches, wkGuesses, raw] = await Promise.all([
       kv.get(USERS_KEY).catch(()=>null),
-      kv.get(MATCHES_KEY(w)).catch(()=>null),
-      kv.get(GUESSES_KEY(w)).catch(()=>null),
+      kv.get(MATCHES_KEY(1)).catch(()=>null),
+      kv.get(GUESSES_KEY(1)).catch(()=>null),
       kv.get(KEY).catch(()=>null)
     ])
 
-    const matches = Array.isArray(wkMatches) ? wkMatches : (Array.isArray(raw?.matches) ? raw.matches.filter(m => Number(m.week) === w) : [])
-    const guesses = Array.isArray(wkGuesses) ? wkGuesses : (Array.isArray(raw?.userGuesses) ? raw.userGuesses.filter(g => Number(g.week) === w) : [])
+    const matches = Array.isArray(wkMatches) ? wkMatches : (Array.isArray(raw?.matches) ? raw.matches : [])
+    const guesses = Array.isArray(wkGuesses) ? wkGuesses : (Array.isArray(raw?.userGuesses) ? raw.userGuesses : [])
     const usersArr = Array.isArray(users) ? users : (Array.isArray(raw?.users) ? raw.users : [])
     const byId = new Map(usersArr.map(u => [u.id, u]))
     

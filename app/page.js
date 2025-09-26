@@ -23,14 +23,12 @@ export default function Home() {
       let currentPot = await dataManager.getPot()
       try {
         const s = await dataManager.getSettings()
-        const w = 1 // תמיד שבוע 1
-        const resPot = await fetch(`/api/pot?week=${w}`, { cache: 'no-store' })
+        const resPot = await fetch(`/api/pot`, { cache: 'no-store' })
         if (resPot.ok) currentPot = await resPot.json()
       } catch (_) {}
       // משוך דירוג מהיר מהשרת (קל משקל)
       try {
-        const w = 1 // תמיד שבוע 1
-        const res = await fetch(`/api/leaderboard?week=${w}`, { cache: 'no-store' })
+        const res = await fetch(`/api/leaderboard`, { cache: 'no-store' })
         if (res.ok) {
           const j = await res.json()
           setLeaderboard(Array.isArray(j.leaderboard) ? j.leaderboard : [])
@@ -40,7 +38,7 @@ export default function Home() {
       } catch (_) {
         setLeaderboard(await dataManager.getLeaderboard())
       }
-      // טען משחקי השבוע הנוכחי
+      // טען משחקים
       const currentMatches = await dataManager.getMatches()
       setMatches(currentMatches)
       setPot(currentPot)

@@ -27,7 +27,6 @@ const MATCHES_KEY = (w) => `toto:week:${w}:matches:v1`
 const GUESSES_KEY = (w) => `toto:week:${w}:guesses:v1`
 
 const defaultData = {
-  currentWeek: 1,
   adminPassword: '1234',
   entryFee: 35,
   totoFirstPrize: 8000000,
@@ -35,7 +34,6 @@ const defaultData = {
   users: [],
   userGuesses: [],
   pots: [],
-  deletedWeeks: [],
   deletedGuessKeys: [],
   deletedUsers: [],
   countdownActive: false,
@@ -213,7 +211,6 @@ export const POST = async (req) => {
           return true
         }).map(m => ({
           ...m,
-          week: Number(m.week) || 1,
           createdAt: m.createdAt || new Date().toISOString(),
           updatedAt: m.updatedAt || new Date().toISOString()
         }))
@@ -226,7 +223,6 @@ export const POST = async (req) => {
       
       // עדכון הטבלאות המפוצלות
       const metaToSave = {
-        currentWeek: raw.currentWeek ?? defaultData.currentWeek,
         adminPassword: raw.adminPassword ?? defaultData.adminPassword,
         entryFee: raw.entryFee ?? defaultData.entryFee,
         totoFirstPrize: raw.totoFirstPrize ?? defaultData.totoFirstPrize,
@@ -240,27 +236,13 @@ export const POST = async (req) => {
         await kv.set(USERS_KEY, raw.users)
       }
       
-      // עדכון טבלאות לפי שבוע
-      const groupByWeek = (arr) => {
-        const map = new Map()
-        ;(Array.isArray(arr) ? arr : []).forEach(it => {
-          const w = Number(it?.week)
-          if (!Number.isNaN(w)) {
-            if (!map.has(w)) map.set(w, [])
-            map.get(w).push(it)
-          }
-        })
-        return map
+      // עדכון טבלאות
+      if (Array.isArray(raw.matches)) {
+        await kv.set(MATCHES_KEY(1), raw.matches)
       }
       
-      const matchesByWeek = groupByWeek(raw.matches)
-      for (const [w, list] of matchesByWeek.entries()) {
-        await kv.set(MATCHES_KEY(w), list)
-      }
-      
-      const guessesByWeek = groupByWeek(raw.userGuesses)
-      for (const [w, list] of guessesByWeek.entries()) {
-        await kv.set(GUESSES_KEY(w), list)
+      if (Array.isArray(raw.userGuesses)) {
+        await kv.set(GUESSES_KEY(1), raw.userGuesses)
       }
       
       return new Response(JSON.stringify({ 
@@ -310,7 +292,6 @@ export async function GET(request) {
     }
 
     const raw = (await kv.get(KEY)) || defaultData
-    // תמיד שבוע 1
     const fieldsParam = searchParams.get('fields') || searchParams.get('only')
     const wanted = fieldsParam ? new Set(fieldsParam.split(',').map(s => s.trim())) : null
 
@@ -320,17 +301,15 @@ export async function GET(request) {
       data = { ...raw }
     }
 
-    // תמיד שבוע 1
-    const w = 1
     // Try split-keys first for faster/smaller payload
     const [wkMatches, wkGuesses] = await Promise.all([
-      kv.get(MATCHES_KEY(w)).catch(()=>null),
-      kv.get(GUESSES_KEY(w)).catch(()=>null)
+      kv.get(MATCHES_KEY(1)).catch(()=>null),
+      kv.get(GUESSES_KEY(1)).catch(()=>null)
     ])
     if (Array.isArray(wkMatches)) {
       data.matches = wkMatches
     } else if (Array.isArray(raw.matches)) {
-      data.matches = raw.matches.filter(m => Number(m.week) === w)
+      data.matches = raw.matches
     } else {
       data.matches = []
     }
@@ -338,7 +317,7 @@ export async function GET(request) {
     if (Array.isArray(wkGuesses)) {
       data.userGuesses = wkGuesses
     } else if (Array.isArray(raw.userGuesses)) {
-      data.userGuesses = raw.userGuesses.filter(g => Number(g.week) === w)
+      data.userGuesses = raw.userGuesses
     } else {
       data.userGuesses = []
     }
@@ -347,7 +326,6 @@ export async function GET(request) {
       const filtered = {}
       if (wanted.has('settings')) {
         const meta = await kv.get(META_KEY).catch(()=>null)
-        filtered.currentWeek = meta?.currentWeek ?? raw.currentWeek
         filtered.adminPassword = meta?.adminPassword ?? raw.adminPassword
         filtered.entryFee = meta?.entryFee ?? raw.entryFee
         filtered.totoFirstPrize = meta?.totoFirstPrize ?? raw.totoFirstPrize ?? 8000000
@@ -416,7 +394,6 @@ export async function PUT(req) {
 
     // Also persist split-keys for faster targeted reads
     const metaToSave = {
-      currentWeek: toSave.currentWeek ?? defaultData.currentWeek,
       adminPassword: toSave.adminPassword ?? defaultData.adminPassword,
       entryFee: toSave.entryFee ?? defaultData.entryFee,
       totoFirstPrize: toSave.totoFirstPrize ?? defaultData.totoFirstPrize,
@@ -430,25 +407,11 @@ export async function PUT(req) {
       try { await kv.set(USERS_KEY, toSave.users) } catch (_) {}
     }
 
-    const groupByWeek = (arr) => {
-      const map = new Map()
-      ;(Array.isArray(arr) ? arr : []).forEach(it => {
-        const w = Number(it?.week)
-        if (!Number.isNaN(w)) {
-          if (!map.has(w)) map.set(w, [])
-          map.get(w).push(it)
-        }
-      })
-      return map
+    if (Array.isArray(toSave.matches)) {
+      try { await kv.set(MATCHES_KEY(1), toSave.matches) } catch (_) {}
     }
-
-    const matchesByWeek = groupByWeek(toSave.matches)
-    for (const [w, list] of matchesByWeek.entries()) {
-      try { await kv.set(MATCHES_KEY(w), list) } catch (_) {}
-    }
-    const guessesByWeek = groupByWeek(toSave.userGuesses)
-    for (const [w, list] of guessesByWeek.entries()) {
-      try { await kv.set(GUESSES_KEY(w), list) } catch (_) {}
+    if (Array.isArray(toSave.userGuesses)) {
+      try { await kv.set(GUESSES_KEY(1), toSave.userGuesses) } catch (_) {}
     }
     return Response.json({ ok: true }, {
       headers: { 'Cache-Control': 'no-store' }
