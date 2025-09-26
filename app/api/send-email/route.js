@@ -10,8 +10,15 @@ const sendEmail = async (to, subject, htmlContent, textContent, attachment = nul
     // שימוש ב-Resend API (חינמי עד 3,000 מיילים בחודש)
     const RESEND_API_KEY = process.env.RESEND_API_KEY
     
+    console.log('Environment check:', {
+      NODE_ENV: process.env.NODE_ENV,
+      RESEND_API_KEY: RESEND_API_KEY ? 'SET' : 'NOT SET',
+      hasApiKey: !!RESEND_API_KEY
+    })
+    
     if (!RESEND_API_KEY) {
       console.error('RESEND_API_KEY not found in environment variables')
+      console.error('Available env vars:', Object.keys(process.env).filter(key => key.includes('RESEND')))
       return { 
         success: false, 
         error: 'Email service not configured. Please set RESEND_API_KEY environment variable.' 
@@ -19,7 +26,7 @@ const sendEmail = async (to, subject, htmlContent, textContent, attachment = nul
     }
 
     const emailData = {
-      from: 'Toto Shlush <noreply@toto-shlush.com>',
+      from: 'Toto Shlush <onboarding@resend.dev>',
       to: [to],
       subject: subject,
       html: htmlContent,
@@ -35,6 +42,13 @@ const sendEmail = async (to, subject, htmlContent, textContent, attachment = nul
       }]
     }
 
+    console.log('Sending email to Resend API:', {
+      to,
+      subject,
+      from: emailData.from,
+      hasAttachment: !!attachment
+    })
+
     const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -44,13 +58,20 @@ const sendEmail = async (to, subject, htmlContent, textContent, attachment = nul
       body: JSON.stringify(emailData)
     })
 
+    console.log('Resend API response:', {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok
+    })
+
     if (!response.ok) {
       const errorData = await response.json()
       console.error('Resend API error:', errorData)
-      return { success: false, error: errorData.message || 'Failed to send email' }
+      return { success: false, error: errorData.message || `HTTP ${response.status}: ${response.statusText}` }
     }
 
     const result = await response.json()
+    console.log('Resend API success:', result)
     return { success: true, messageId: result.id }
   } catch (error) {
     console.error('Email sending error:', error)
