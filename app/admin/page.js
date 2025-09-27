@@ -243,18 +243,27 @@ export default function AdminPage() {
   const loadAdminData = async () => {
     setIsLoading(true);
     try {
-      console.log('Loading admin data...');
-      const currentSettings = await dataManager.getSettings();
+      console.log('Loading admin data from server...');
+      
+      // טען את כל הנתונים מהשרת דרך API routes
+      const [dataResponse, leaderboardResponse, potResponse] = await Promise.all([
+        fetch('/api/data?legacy=true'),
+        fetch('/api/leaderboard'),
+        fetch('/api/pot')
+      ]);
+
+      const data = await dataResponse.json();
+      const currentSettings = data.settings;
       console.log('Settings loaded:', currentSettings);
-      const currentMatches = await dataManager.getMatches();
+      const currentMatches = data.matches;
       console.log('Matches loaded:', currentMatches);
-      const currentParticipants = await dataManager.getUsers();
+      const currentParticipants = data.users;
       console.log('Participants loaded:', currentParticipants);
-      const currentGuesses = await dataManager.getUserGuesses();
+      const currentGuesses = data.userGuesses;
       console.log('Guesses loaded:', currentGuesses);
-      const currentLeaderboard = await dataManager.getLeaderboard();
+      const currentLeaderboard = await leaderboardResponse.json();
       console.log('Leaderboard loaded:', currentLeaderboard);
-      const currentPot = await dataManager.getPot();
+      const currentPot = await potResponse.json();
       console.log('Pot loaded:', currentPot);
 
       // Debug: Check for duplicate user IDs
@@ -503,6 +512,9 @@ export default function AdminPage() {
       
       setSettings({ ...settings, submissionsLocked: next });
       showToast(next ? 'הגשה ננעלה' : 'הגשה נפתחה');
+      
+      // רענן את הנתונים מהשרת כדי לוודא שהכל מעודכן
+      await loadAdminData();
     } catch (error) {
       console.error('Error updating settings:', error);
       showToast('שגיאה בעדכון ההגדרות', 'error');
