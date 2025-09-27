@@ -312,12 +312,15 @@ export async function GET(request) {
           users: Array.isArray(users) ? users : (Array.isArray(raw.users) ? raw.users : []),
           matches: Array.isArray(matches) ? matches : (Array.isArray(raw.matches) ? raw.matches : []),
           userGuesses: Array.isArray(guesses) ? guesses : (Array.isArray(raw.userGuesses) ? raw.userGuesses : []),
-          adminPassword: meta?.adminPassword ?? raw.adminPassword,
-          entryFee: meta?.entryFee ?? raw.entryFee,
-          totoFirstPrize: meta?.totoFirstPrize ?? raw.totoFirstPrize,
-          submissionsLocked: meta?.submissionsLocked ?? raw.submissionsLocked,
-          countdownActive: meta?.countdownActive ?? raw.countdownActive,
-          countdownTarget: meta?.countdownTarget ?? raw.countdownTarget
+          settings: {
+            adminPassword: meta?.adminPassword ?? raw.adminPassword,
+            entryFee: meta?.entryFee ?? raw.entryFee,
+            totoFirstPrize: meta?.totoFirstPrize ?? raw.totoFirstPrize,
+            submissionsLocked: meta?.submissionsLocked ?? raw.submissionsLocked,
+            countdownActive: meta?.countdownActive ?? raw.countdownActive,
+            countdownTarget: meta?.countdownTarget ?? raw.countdownTarget,
+            adminEmail: raw.adminEmail || ''
+          }
         }
 
         return Response.json(data, { headers: { 'Cache-Control': 'no-store' } })

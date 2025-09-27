@@ -218,7 +218,9 @@ export default function AdminPage() {
     if (confirm('האם אתה בטוח שברצונך למחוק את המשחק?')) {
       await dataManager.deleteMatch(matchId);
       await dataManager.initialize();
-      const updatedMatches = await dataManager.getMatches();
+      const response = await fetch('/api/data?legacy=true');
+      const data = await response.json();
+      const updatedMatches = data.matches;
       setMatches(updatedMatches);
       showToast('משחק נמחק');
     }
@@ -230,7 +232,9 @@ export default function AdminPage() {
       await dataManager.clearAllMatches();
       
       // Update UI state
-      const updated = await dataManager.getMatches();
+      const response = await fetch('/api/data?legacy=true');
+      const data = await response.json();
+      const updated = data.matches;
       setMatches(updated);
       
       // Also refresh all admin data to ensure everything is in sync
@@ -381,7 +385,9 @@ export default function AdminPage() {
         }
       }
       
-      setMatches(await dataManager.getMatches());
+      const response = await fetch('/api/data?legacy=true');
+      const data = await response.json();
+      setMatches(data.matches);
       showToast(`נטענו ${newMatches.length} משחקים`);
     } catch (error) {
       console.error('Error uploading JSON:', error);
@@ -411,7 +417,9 @@ export default function AdminPage() {
       setMatches((prev) => prev.map((m) => (m.id === matchId ? updatedMatch : m)));
       if (field === 'result') {
         await dataManager.calculateScores();
-        setLeaderboard(await dataManager.getLeaderboard());
+        const response = await fetch('/api/leaderboard');
+        const data = await response.json();
+        setLeaderboard(data);
       }
     }
   };
@@ -709,7 +717,9 @@ export default function AdminPage() {
     }
     
     // בדיקה שהניחוש עדיין קיים במערכת
-      const currentGuesses = await dataManager.getUserGuesses();
+      const response = await fetch('/api/data?legacy=true');
+      const data = await response.json();
+      const currentGuesses = data.userGuesses;
       const stillExists = currentGuesses.find(g => g.id === guess.id);
     
     if (!stillExists) {
