@@ -304,16 +304,18 @@ class DataManager {
       let kv;
       
       // בדוק אם אנחנו בסביבת פיתוח ללא משתני סביבה של Vercel KV
-      if (typeof window !== 'undefined' || !process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
-        // השתמש ב-local KV mock לפיתוח מקומי
-        console.log('🏠 DataManager: Using local KV mock');
-        const { kv: localKV } = await import('../../app/lib/local-kv');
-        kv = localKV;
-      } else {
+      console.log(`🔍 DataManager: window=${typeof window}, KV_URL=${!!process.env.KV_REST_API_URL}, KV_TOKEN=${!!process.env.KV_REST_API_TOKEN}`);
+      
+      if (typeof window === 'undefined' && process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN) {
         // השתמש ב-Vercel KV בפרודקשן
         console.log('☁️ DataManager: Using Vercel KV');
         const { kv: vercelKV } = await import('@vercel/kv');
         kv = vercelKV;
+      } else {
+        // השתמש ב-local KV mock לפיתוח מקומי
+        console.log('🏠 DataManager: Using local KV mock');
+        const { kv: localKV } = await import('../../app/lib/local-kv');
+        kv = localKV;
       }
 
       const KEY = 'toto:data:v1';
