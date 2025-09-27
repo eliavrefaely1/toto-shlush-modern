@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { dataManager } from '../../src/lib/data-manager';
 
 export const useGuessData = () => {
   const router = useRouter();
@@ -16,11 +15,15 @@ export const useGuessData = () => {
   useEffect(() => {
     // טעינת משחקים מהשרת
     (async () => {
-      await dataManager.initialize();
-      const currentMatches = await dataManager.getMatches();
-      setMatches(currentMatches);
-      const s = await dataManager.getSettings();
-      setIsLocked(!!s.submissionsLocked);
+      try {
+        const response = await fetch('/api/data?legacy=true');
+        const data = await response.json();
+        setMatches(data.matches || []);
+        setIsLocked(!!data.settings?.submissionsLocked);
+      } catch (error) {
+        console.error('Error loading matches:', error);
+        setMatches([]);
+      }
     })();
   }, []);
 
@@ -42,14 +45,6 @@ export const useGuessData = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    // בדיקת מצב נעילה מהשרת ברגע השליחה
-    await dataManager.initialize();
-    const sNow = await dataManager.getSettings();
-    if (sNow.submissionsLocked) {
-      setIsLocked(true);
-      alert('ההגשה סגורה כרגע. נסו מאוחר יותר.');
-      return;
-    }
     
     if (!formData.name.trim()) {
       alert('אנא מלא את שמך המלא');
@@ -66,33 +61,42 @@ export const useGuessData = () => {
     setIsSubmitting(true);
 
     try {
-      // יצירת משתמש אם לא קיים
-      let users = await dataManager.getUsers();
-      let user = users.find(u => (u.name||'').toLowerCase().trim() === formData.name.toLowerCase().trim());
-      if (!user) {
-        user = await dataManager.addUser({
-          name: formData.name
-        });
+      console.log('🎯 Client: Submitting guess for:', formData.name);
+      
+      // השתמש ב-API route שירוץ בצד השרת עם גישה ל-Vercel KV
+      const response = await fetch('/api/add-guess', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: formData.name,
+          guesses: formData.guesses
+        }),
+      });
+
+      console.log(`📡 Client: API response status: ${response.status}`);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('❌ Client: API error:', errorData);
+        
+        if (response.status === 403) {
+          alert('ההגשה סגורה כרגע. נסו מאוחר יותר.');
+          setIsLocked(true);
+          return;
+        }
+        
+        throw new Error('Failed to submit guess');
       }
 
-      // שמירת הניחושים
-      console.log('💾 Adding user guess for:', formData.name);
-      await dataManager.addUserGuess({ userId: user.id, name: formData.name, guesses: formData.guesses });
-      console.log('✅ User guess added successfully');
+      const result = await response.json();
+      console.log(`✅ Client: Guess submitted successfully:`, result);
 
       setShowSuccess(true);
       
       // הגדר flag לעדכון הדירוג
       sessionStorage.setItem('shouldRefreshLeaderboard', 'true');
-      
-      // עדכון מיידי של הדירוג
-      try {
-        console.log('🔄 Calculating scores...');
-        await dataManager.calculateScores();
-        console.log('✅ Scores calculated successfully');
-      } catch (error) {
-        console.error('Error calculating scores:', error);
-      }
       
       setTimeout(() => {
         router.push('/leaderboard');
