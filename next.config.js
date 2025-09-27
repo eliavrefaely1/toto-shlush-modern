@@ -3,6 +3,16 @@ const nextConfig = {
   images: {
     domains: [],
   },
+  experimental: {
+    typedRoutes: true,
+  },
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@': require('path').resolve(__dirname, 'src'),
+    };
+    return config;
+  },
 }
 
 module.exports = nextConfig
