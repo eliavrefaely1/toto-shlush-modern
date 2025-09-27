@@ -2,8 +2,19 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Shield, Settings, Users, Trophy, Plus, Save, Eye, EyeOff, ArrowLeft, Edit, Trash2, CheckCircle, RefreshCw } from 'lucide-react';
+import { Shield, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import dataManager from '../lib/data.js';
+
+// Import components
+import AdminHeader from './components/AdminHeader';
+import AdminTabs from './components/AdminTabs';
+import MatchesTab from './components/MatchesTab';
+import ParticipantsTab from './components/ParticipantsTab';
+import UsersTab from './components/UsersTab';
+import BackupsTab from './components/BackupsTab';
+import SettingsTab from './components/SettingsTab';
+import RenameUserModal from './components/RenameUserModal';
+import EditGuessModal from './components/EditGuessModal';
 
 // DataManager loaded successfully
 
@@ -13,11 +24,17 @@ export default function AdminPage() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [activeTab, setActiveTab] = useState('matches');
-  const [isLoading, setIsLoading] = useState(false);
   const [toast, setToast] = useState(null);
   const [adminToken, setAdminToken] = useState('');
 
-  const [settings, setSettings] = useState({ adminPassword: '1234', entryFee: 35, totoFirstPrize: 8000000, submissionsLocked: false, adminEmail: '' });
+  // Data states
+  const [settings, setSettings] = useState({ 
+    adminPassword: '1234', 
+    entryFee: 35, 
+    totoFirstPrize: 8000000, 
+    submissionsLocked: false, 
+    adminEmail: '' 
+  });
   const [tempAdminEmail, setTempAdminEmail] = useState('');
   const [matches, setMatches] = useState([]);
   const [participants, setParticipants] = useState([]);
@@ -25,20 +42,22 @@ export default function AdminPage() {
   const [pot, setPot] = useState({ totalAmount: 0, numOfPlayers: 0 });
   const [guessesThisWeek, setGuessesThisWeek] = useState([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  // מיון
-  const [sortWeek, setSortWeek] = useState('score_desc'); // score_desc | score_asc | name_asc | name_desc
-  const [sortAll, setSortAll] = useState('name_asc');     // name_asc | name_desc | joined_new | joined_old | hasguess_first
-  const [cleanNewWeekMatches, setCleanNewWeekMatches] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  
+  // Sorting states
+  const [sortWeek, setSortWeek] = useState('score_desc');
+  const [sortAll, setSortAll] = useState('name_asc');
+  
+  // Countdown states
   const [countdownActiveLocal, setCountdownActiveLocal] = useState(false);
   const [countdownDate, setCountdownDate] = useState('');
   const [countdownTime, setCountdownTime] = useState('');
   const [updateTimeout, setUpdateTimeout] = useState(null);
-  // מודל שינוי שם
+  
+  // Modal states
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [renameUser, setRenameUser] = useState(null);
   const [newUserName, setNewUserName] = useState('');
-  
-  // מודל עריכת ניחוש
   const [showEditGuessModal, setShowEditGuessModal] = useState(false);
   const [editGuessUser, setEditGuessUser] = useState(null);
   const [editGuessData, setEditGuessData] = useState(null);
@@ -69,6 +88,7 @@ export default function AdminPage() {
   }, []);
 
   const getAdminHeaders = () => ({ 'X-Action': 'admin', ...(adminToken ? { 'X-Admin-Token': adminToken } : {}) });
+  
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 2500);
@@ -114,26 +134,17 @@ export default function AdminPage() {
 
     setIsLoading(true);
     try {
-      // בדיקה ראשונית של שירות המייל
-      const testEmailResponse = await fetch('/api/send-email', {
-        method: 'PUT',
+      // יצירת גיבוי
+      const backupResponse = await fetch('/api/backup', {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          to: emailToUse,
-          subject: 'בדיקת שירות מייל - טוטו שלוש',
-          message: 'זוהי הודעת בדיקה. אם אתה רואה את זה, שירות המייל עובד!'
+          action: 'create',
+          triggerAction: 'Manual backup from admin panel'
         })
       });
-
-      const testResult = await testEmailResponse.json();
-      if (!testResult.success) {
-        throw new Error(`שירות המייל לא מוגדר: ${testResult.error}`);
-      }
-
-      // יצירת גיבוי
-      const backupResponse = await fetch('/api/backup?action=create');
       const backupResult = await backupResponse.json();
       
       if (!backupResult.success) {
@@ -147,7 +158,7 @@ export default function AdminPage() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          backupData: backupResult,
+          backupData: backupResult.fullBackupData || backupResult,
           recipientEmail: emailToUse
         })
       });
@@ -655,24 +666,10 @@ export default function AdminPage() {
                     </button>
                   </div>
                 </div>
-                {false && (
-                  <div>
-                    <label className="block text-sm font-medium text-blue-700 mb-2">Admin API Token (רשות)</label>
-                    <input
-                      type="text"
-                      value={adminToken}
-                      onChange={(e) => setAdminToken(e.target.value)}
-                      placeholder="X-Admin-Token"
-                      className="input"
-                    />
-                    <button type="button" onClick={() => { localStorage.setItem('toto-admin-token', adminToken); showToast('Token נשמר'); }} className="btn btn-secondary mt-2">שמור Token</button>
-                  </div>
-                )}
                 <button type="submit" className="btn bg-blue-600 hover:bg-blue-700 text-white w-full py-3 text-lg font-bold">
                   <Shield className="w-5 h-5 ml-2" /> כניסה
                 </button>
               </form>
-              {/* הסרת הצגת סיסמת ברירת מחדל */}
             </div>
           </div>
         </div>
@@ -693,793 +690,158 @@ export default function AdminPage() {
     );
   }
 
-  return (
-    <>
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100" dir="rtl">
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        {toast && (
-          <div className={`fixed top-4 right-4 z-50 px-4 py-2 rounded text-white shadow ${toast.type==='success'?'bg-green-600':'bg-red-600'}`}>
-            {toast.msg}
-          </div>
-        )}
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <Shield className="w-8 h-8 text-blue-600" />
-            <h1 className="text-3xl font-bold text-blue-800">פאנל מנהל</h1>
-          </div>
-          <p className="text-lg text-blue-600">ניהול משחקים, תוצאות ומשתתפים</p>
-        </div>
-        <div className="mb-6 flex items-center gap-2 flex-wrap">
-          <button onClick={() => router.push('/')} className="btn btn-secondary flex items-center gap-2">
-            <ArrowLeft className="w-4 h-4" /> חזרה לדף הבית
-          </button>
-          <button onClick={refreshAll} disabled={isRefreshing} className="btn btn-secondary flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
-            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} /> {isRefreshing ? 'מרענן...' : 'רענן נתונים'}
-          </button>
-          <button onClick={() => router.push('/backup-manager')} className="btn bg-green-600 hover:bg-green-700 text-white flex items-center gap-2">
-            <Shield className="w-4 h-4" /> מנהל גיבויים
-          </button>
-          <button onClick={sendBackupToEmail} disabled={isLoading} className="btn bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2 disabled:opacity-50">
-            <Shield className="w-4 h-4" /> שלח גיבוי למייל
-          </button>
-          <button onClick={testEmailService} disabled={isLoading} className="btn bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-2 disabled:opacity-50">
-            <Shield className="w-4 h-4" /> בדוק שירות מייל
-          </button>
-          <button onClick={resetLocalCache} className="btn btn-danger flex items-center gap-2">אפס קאש מקומי</button>
-        </div>
-        <div className="card mb-6">
-          <div className="card-content p-0">
-            <div className="flex flex-wrap border-b">
-              {[
-                { id: 'matches', label: 'משחקים', icon: Trophy },
-                { id: 'results', label: 'תוצאות', icon: Users },
-                { id: 'participants', label: 'משתתפים', icon: Users },
-                { id: 'users', label: 'ניהול משתמשים', icon: Users },
-                { id: 'settings', label: 'הגדרות', icon: Settings },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`w-1/2 sm:flex-1 px-4 py-3 text-center font-medium transition-all flex flex-col items-center justify-center ${
-                    activeTab === tab.id
-                      ? 'bg-blue-500 text-white border-b-2 border-blue-600'
-                      : 'text-gray-700 hover:bg-gray-50'
-                  }`}
-                >
-                  <tab.icon className="w-5 h-5 mb-1" />
-                  <span className="text-sm truncate">{tab.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-        {activeTab === 'matches' && (
-          <div className="space-y-6">
-            {/* העלאת JSON */}
-            <div className="card">
-              <div className="card-header">
-                <h2 className="text-xl font-bold text-blue-800">העלאת נתוני טוטו 16</h2>
-                <p className="text-gray-600"></p>
-              </div>
-              <div className="card-content">
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-md font-medium text-gray-700 mb-2">
-                      הדבק נתונים:
-                    </label>
-                    <textarea
-                      className="input h-32"
-                      placeholder="Winner16 --> inspect --> network --> GetTotoDraws --> GamType96"
-                      onChange={(e) => {
-                        if (e.target.value.trim()) {
-                          uploadJSON(e.target.value);
-                        }
-                      }}
-                    />
-                  </div>
-                  <div className="flex gap-4">
-                    <button onClick={createDefaultMatches} className="btn bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2">
-                      <Plus className="w-4 h-4" /> יצירת 16 משחקים ברירת מחדל
-                    </button>
-                    {matches.length > 0 && (
-                      <div className="flex gap-2">
-                        <button onClick={clearAllMatches} className="btn btn-danger flex items-center gap-2">
-                          <Trash2 className="w-4 h-4" /> מחק משחקי השבוע
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
+  // Helper functions for sorting and data processing
+  const getScore = (u) => {
+    const scoreById = new Map(leaderboard.map(l => [l.userId, l.score]));
+    const scoreByName = new Map(leaderboard.map(l => [String(l.name||'').toLowerCase().trim(), l.score]));
+    return (scoreById.get(u.id) ?? scoreByName.get(String(u.name||'').toLowerCase().trim()) ?? 0);
+  };
 
-            {/* רשימת משחקים */}
-            <div className="card">
-              <div className="card-header">
-                <h2 className="text-xl font-bold text-blue-800">משחקים</h2>
-                <p className="text-gray-600">{matches.length} משחקים</p>
-              </div>
-              <div className="card-content">
-                {matches.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Trophy className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500 text-lg">אין משחקים זמינים</p>
-                    <p className="text-gray-400">העלה נתונים או צור משחקים ברירת מחדל</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {matches.map((match, index) => (
-                      <div key={match.id} className="border rounded-lg p-4 bg-gray-50">
-                        <div className="flex items-center justify-between mb-2">
-                          <h3 className="font-bold text-blue-800">משחק {index + 1}</h3>
-                          <button
-                            onClick={() => deleteMatch(match.id)}
-                            className="text-red-500 hover:text-red-700"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                        <div className="space-y-2">
-                          <div>
-                            <label className="text-sm text-gray-600">קבוצה בית:</label>
-                            <input
-                              type="text"
-                              value={match.homeTeam || ''}
-                              onChange={(e) => updateMatch(match.id, 'homeTeam', e.target.value)}
-                              className="input text-sm"
-                            />
-                          </div>
-                          <div>
-                            <label className="text-sm text-gray-600">קבוצה חוץ:</label>
-                            <input
-                              type="text"
-                              value={match.awayTeam || ''}
-                              onChange={(e) => updateMatch(match.id, 'awayTeam', e.target.value)}
-                              className="input text-sm"
-                            />
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                            <div>
-                              <label className="text-sm text-gray-600">יום:</label>
-                              <input
-                                type="text"
-                                value={match.day || ''}
-                                onChange={(e) => updateMatch(match.id, 'day', e.target.value)}
-                                className="input text-sm"
-                              />
-                            </div>
-                            <div>
-                              <label className="text-sm text-gray-600">שעה:</label>
-                              <input
-                                type="text"
-                                value={match.time || ''}
-                                onChange={(e) => updateMatch(match.id, 'time', e.target.value)}
-                                className="input text-sm"
-                              />
-                            </div>
-                            <div>
-                              <label className="text-sm text-gray-600">תאריך:</label>
-                              <input
-                                type="date"
-                                value={formatDateForInput(match.date)}
-                                onChange={(e) => updateMatch(match.id, 'date', e.target.value)}
-                                className="input text-sm"
-                              />
-                            </div>
-                          </div>
-                          {/* הסרת בחירת תוצאה במסך משחקים - ניהול תוצאות בלשונית ייעודית */}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-        {activeTab === 'results' && (
-          <div className="space-y-6">
-            <div className="card">
-              <div className="card-header">
-                <h2 className="text-xl font-bold text-blue-800">תוצאות משחקים</h2>
-                <p className="text-gray-600">ניהול תוצאות המשחקים וחישוב ניקוד</p>
-              </div>
-              <div className="card-content">
-                {matches.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Trophy className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500">אין משחקים להצגת תוצאות</p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {/* כרטיס חישוב ניקוד הוסתר – הניקוד מחושב אוטומטית */}
-                    {false && (
-                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                        <h3 className="font-bold text-yellow-800 mb-2">חישוב ניקוד</h3>
-                        <p className="text-yellow-700 text-sm">
-                          לאחר הזנת כל התוצאות, הניקוד יחושב אוטומטית לכל המשתתפים
-                        </p>
-                        <button 
-                          onClick={async () => {
-                            dataManager.calculateScores();
-                            setLeaderboard(await dataManager.getLeaderboard());
-                            showToast('ניקוד חושב בהצלחה!');
-                          }}
-                          className="btn btn-primary mt-2"
-                        >
-                          חשב ניקוד עכשיו
-                        </button>
-                      </div>
-                    )}
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {matches.map((match, index) => (
-                        <div key={match.id} className="border rounded-lg p-4 bg-gray-50">
-                          <h3 className="font-bold text-blue-800 mb-2">משחק {index + 1}</h3>
-                          <div className="text-center mb-3">
-                            <div className="text-lg font-bold">
-                              {match.homeTeam} vs {match.awayTeam}
-                            </div>
-                          </div>
-                          <div className="text-center text-xs text-gray-600 mb-3">
-                            {match.day ? <span>יום {match.day}</span> : null}
-                            {match.day ? <span> • </span> : null}
-                            {match.date ? <span>{formatDateDisplay(match.date)}</span> : null}
-                            {(match.date || match.day) && match.time ? <span> • </span> : null}
-                            {match.time ? <span>{match.time}</span> : null}
-                            { (match.league) ? <span className="block mt-1 text-gray-500">{match.league}</span> : null }
-                          </div>
-                          <div>
-                            <label className="text-sm text-gray-600">תוצאה:</label>
-                            <select
-                              value={match.result || ''}
-                              onChange={(e) => updateMatch(match.id, 'result', e.target.value)}
-                              className="input text-sm w-full"
-                            >
-                              <option value="">בחר תוצאה</option>
-                              <option value="1">1 (בית)</option>
-                              <option value="X">X (תיקו)</option>
-                              <option value="2">2 (חוץ)</option>
-                            </select>
-                          </div>
-                          {match.result && (
-                            <div className="flex items-center gap-2 text-blue-600 mt-2">
-                              <CheckCircle className="w-4 h-4" />
-                              <span className="text-sm">תוצאה: {match.result}</span>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-        {activeTab === 'participants' && (() => {
+  // Prepare data for components
           const participantsWithGuess = guessesThisWeek.map(g => ({
             guess: g,
             user: participants.find(p => p.id === g.userId) || { id: g.userId, name: g.name, phone: g.phone, createdAt: g.createdAt }
           }));
-          const byUserId = new Map(guessesThisWeek.map(g => [g.userId, g]))
-          const scoreById = new Map(leaderboard.map(l => [l.userId, l.score]))
-          const scoreByName = new Map(leaderboard.map(l => [String(l.name||'').toLowerCase().trim(), l.score]))
-          const getScore = (u) => (scoreById.get(u.id) ?? scoreByName.get(String(u.name||'').toLowerCase().trim()) ?? 0)
+
+  const byUserId = new Map(guessesThisWeek.map(g => [g.userId, g]));
 
           const sortedWeek = [...participantsWithGuess].sort((a,b) => {
-            const sa = getScore(a.user), sb = getScore(b.user)
-            const na = String(a.user.name||'').toLowerCase(), nb = String(b.user.name||'').toLowerCase()
+    const sa = getScore(a.user), sb = getScore(b.user);
+    const na = String(a.user.name||'').toLowerCase(), nb = String(b.user.name||'').toLowerCase();
             switch (sortWeek) {
-              case 'score_asc': return sa - sb || na.localeCompare(nb)
-              case 'name_asc': return na.localeCompare(nb)
-              case 'name_desc': return nb.localeCompare(na)
+      case 'score_asc': return sa - sb || na.localeCompare(nb);
+      case 'name_asc': return na.localeCompare(nb);
+      case 'name_desc': return nb.localeCompare(na);
               case 'score_desc':
-              default: return sb - sa || na.localeCompare(nb)
+      default: return sb - sa || na.localeCompare(nb);
             }
-          })
+  });
 
           const sortedAll = [...participants].sort((a,b) => {
-            const hasA = byUserId.has(a.id), hasB = byUserId.has(b.id)
-            const na = String(a.name||'').toLowerCase(), nb = String(b.name||'').toLowerCase()
-            const ta = new Date(a.createdAt||0).getTime(), tb = new Date(b.createdAt||0).getTime()
+    const hasA = byUserId.has(a.id), hasB = byUserId.has(b.id);
+    const na = String(a.name||'').toLowerCase(), nb = String(b.name||'').toLowerCase();
+    const ta = new Date(a.createdAt||0).getTime(), tb = new Date(b.createdAt||0).getTime();
             switch (sortAll) {
-              case 'name_desc': return nb.localeCompare(na)
-              case 'joined_new': return tb - ta
-              case 'joined_old': return ta - tb
-              case 'hasguess_first': return (hasB?1:0) - (hasA?1:0) || nb.localeCompare(na)
+      case 'name_desc': return nb.localeCompare(na);
+      case 'joined_new': return tb - ta;
+      case 'joined_old': return ta - tb;
+      case 'hasguess_first': return (hasB?1:0) - (hasA?1:0) || nb.localeCompare(na);
               case 'name_asc':
-              default: return na.localeCompare(nb)
+      default: return na.localeCompare(nb);
             }
-          })
+  });
+
           return (
-            <div className="space-y-6">
-            {/* טבלת דירוג לשבוע הנוכחי (כמו היום) */}
-            <div className="card">
-              <div className="card-header">
-                <h2 className="text-xl font-bold text-blue-800">משתתפים</h2>
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <p className="text-gray-600">{participantsWithGuess.length} משתתפים עם ניחוש</p>
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm text-gray-600">מיין לפי:</label>
-                    <select value={sortWeek} onChange={(e)=>setSortWeek(e.target.value)} className="input w-44 text-sm">
-                      <option value="score_desc">ניקוד (גבוה→נמוך)</option>
-                      <option value="score_asc">ניקוד (נמוך→גבוה)</option>
-                      <option value="name_asc">שם (א׳→ת׳)</option>
-                      <option value="name_desc">שם (ת׳→א׳)</option>
-                    </select>
-                  </div>
-                  <button onClick={clearAllGuessesForCurrentWeek} className="btn btn-danger flex items-center gap-2">
-                    <Trash2 className="w-4 h-4" /> מחק את כל הניחושים
-                  </button>
-                </div>
-              </div>
-              <div className="card-content">
-                {participantsWithGuess.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500">אין ניחושים לשבוע הנוכחי</p>
-                  </div>
-                ) : (
-                  <>
-                    {/* סיכום תשלומים - רק למשתתפים השבועיים */}
-                    <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-                      <h4 className="font-bold text-gray-800 mb-3">סיכום תשלומים</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-green-600">
-                            {participantsWithGuess.filter(({ guess }) => (guess.paymentStatus || 'unpaid') === 'paid').length}
+    <>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100" dir="rtl">
+        <div className="max-w-6xl mx-auto px-4 py-8">
+          {toast && (
+            <div className={`fixed top-4 right-4 z-50 px-4 py-2 rounded text-white shadow ${toast.type==='success'?'bg-green-600':'bg-red-600'}`}>
+              {toast.msg}
                           </div>
-                          <div className="text-sm text-gray-600">שילמו</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-red-600">
-                            {participantsWithGuess.filter(({ guess }) => (guess.paymentStatus || 'unpaid') === 'unpaid').length}
-                          </div>
-                          <div className="text-sm text-gray-600">לא שילמו</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-blue-600">
-                            ₪{participantsWithGuess.filter(({ guess }) => (guess.paymentStatus || 'unpaid') === 'paid').length * settings.entryFee}
-                          </div>
-                          <div className="text-sm text-gray-600">סכום שנאסף</div>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="space-y-4">
-                    {sortedWeek.map(({ user, guess }) => (
-                      <div key={`participant-${guess.id}`} className="border rounded-lg p-4 bg-gray-50">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <h3 className="font-bold text-blue-800">{user.name}</h3>
-                            <p className="text-sm text-gray-500">
-                              הצטרף: {new Date(user.createdAt).toLocaleDateString('he-IL')}
-                            </p>
-                            <div className="mt-2 text-xs text-blue-600">ניחוש קיים</div>
-                          </div>
-                          <div className="flex items-center gap-4">
-                            {/* צ'ק בוקס תשלום - רק למשתתפים השבועיים */}
-                            <div className="flex flex-col items-center">
-                              <label className="text-xs text-gray-500 mb-1">תשלום</label>
-                              <div className="flex items-center gap-2">
-                                <input
-                                  type="checkbox"
-                                  checked={(guess.paymentStatus || 'unpaid') === 'paid'}
-                                  onChange={(e) => updatePaymentStatus(guess.id, e.target.checked ? 'paid' : 'unpaid')}
-                                  className="w-4 h-4 text-green-600 bg-gray-100 border-gray-300 rounded focus:ring-green-500 focus:ring-2"
-                                />
-                                <span className={`text-xs font-medium ${(guess.paymentStatus || 'unpaid') === 'paid' ? 'text-green-600' : 'text-red-600'}`}>
-                                  {(guess.paymentStatus || 'unpaid') === 'paid' ? 'שולם' : 'לא שולם'}
-                                </span>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="text-2xl font-bold text-blue-600">{getScore(user)}</div>
-                              <div className="text-sm text-gray-500">נקודות</div>
-                              <div className="flex flex-col gap-2 mt-2">
-                                <button 
-                                  onClick={() => handleEditGuessClick(user, guess)} 
-                                  disabled={settings.submissionsLocked}
-                                  className={`btn btn-primary flex items-center gap-2 ${settings.submissionsLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                  title={settings.submissionsLocked ? 'לא ניתן לערוך כאשר ההגשה נעולה' : ''}
-                                >
-                                  <Edit className="w-4 h-4" /> ערוך ניחוש
-                                </button>
-                                <button onClick={() => deleteGuessById(guess.id)} className="btn btn-danger flex items-center gap-2">
-                                  <Trash2 className="w-4 h-4" /> מחק ניחוש
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-          );
-        })()}
-        {activeTab === 'users' && (() => {
-          const byUserId = new Map(guessesThisWeek.map(g => [g.userId, g]))
-          const scoreById = new Map(leaderboard.map(l => [l.userId, l.score]))
-          const scoreByName = new Map(leaderboard.map(l => [String(l.name||'').toLowerCase().trim(), l.score]))
-          const getScore = (u) => (scoreById.get(u.id) ?? scoreByName.get(String(u.name||'').toLowerCase().trim()) ?? 0)
-          const sortedAll = [...participants].sort((a,b) => {
-            const hasA = byUserId.has(a.id), hasB = byUserId.has(b.id)
-            const na = String(a.name||'').toLowerCase(), nb = String(b.name||'').toLowerCase()
-            const ta = new Date(a.createdAt||0).getTime(), tb = new Date(b.createdAt||0).getTime()
-            switch (sortAll) {
-              case 'name_desc': return nb.localeCompare(na)
-              case 'joined_new': return tb - ta
-              case 'joined_old': return ta - tb
-              case 'hasguess_first': return (hasB?1:0) - (hasA?1:0) || nb.localeCompare(na)
-              case 'name_asc':
-              default: return na.localeCompare(nb)
-            }
-          })
-          return (
-            <div className="space-y-6">
-            <div className="card">
-              <div className="card-header">
-                <h2 className="text-xl font-bold text-blue-800">ניהול משתמשים</h2>
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <p className="text-gray-600">סה"כ {participants.length} משתמשים</p>
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm text-gray-600">מיין לפי:</label>
-                    <select value={sortAll} onChange={(e)=>setSortAll(e.target.value)} className="input w-64 text-sm">
-                      <option value="name_asc">שם (א׳→ת׳)</option>
-                      <option value="name_desc">שם (ת׳→א׳)</option>
-                      <option value="joined_new">תאריך הצטרפות (חדש→ישן)</option>
-                      <option value="joined_old">תאריך הצטרפות (ישן→חדש)</option>
-                      <option value="hasguess_first">יש ניחוש לשבוע (תחילה)</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-              <div className="card-content">
-                {participants.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Users className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500">אין משתמשים רשומים</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {sortedAll.map((u) => {
-                      const g = byUserId.get(u.id)
-                      const score = getScore(u)
-                      return (
-                        <div key={`user-${u.id}`} className="flex items-center justify-between border rounded-lg p-3 bg-white">
-                          <div className="flex-1">
-                            <div className="font-bold text-blue-800">{u.name}</div>
-                            <div className="text-xs text-gray-500">הצטרף: {new Date(u.createdAt).toLocaleDateString('he-IL')}</div>
-                            {g ? (
-                              <div className="text-xs text-green-700 mt-1">יש ניחוש</div>
-                            ) : (
-                              <div className="text-xs text-gray-500 mt-1">אין ניחוש</div>
-                            )}
-                          </div>
-                          <div className="text-right">
-                            <div className="text-sm text-gray-500">ניקוד שבועי</div>
-                            <div className="text-lg font-bold text-blue-600 text-right">{score || 0}</div>
-                            <div className="flex gap-2 mt-2">
-                              <button onClick={() => openRenameModal(u)} className="btn btn-secondary flex items-center gap-2">
-                                <Edit className="w-4 h-4" /> שנה שם
-                              </button>
-                              <button onClick={() => deleteUserCompletely(u.id)} className="btn btn-danger flex items-center gap-2">
-                                <Trash2 className="w-4 h-4" /> מחק משתמש
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-        })()}
-        {activeTab === 'settings' && (
-          <div className="space-y-6">
-            <div className="card">
-              <div className="card-header">
-                <h2 className="text-xl font-bold text-blue-800">הגדרות מערכת</h2>
-                <p className="text-gray-600">ניהול הגדרות האפליקציה</p>
-              </div>
-              <div className="card-content">
-                <div className="space-y-6">
-                  {/* מערכת השבועות הוסרה - משחק אחד בלבד */}
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      דמי השתתפות (₪)
-                    </label>
-                    <input
-                      type="number"
-                      value={settings.entryFee}
-                      onChange={(e) => updateSettings({ entryFee: parseInt(e.target.value) })}
-                      className="input"
-                      min="1"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      פרס ראשון בטוטו (₪)
-                    </label>
-                    <input
-                      type="number"
-                      value={settings.totoFirstPrize || ''}
-                      onChange={(e) => {
-                        const value = e.target.value === '' ? 0 : parseInt(e.target.value) || 0;
-                        debouncedUpdateSettings({ totoFirstPrize: value });
-                      }}
-                      className="input"
-                      min="1"
-                      placeholder="8000000"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      כתובת מייל לגיבויים (אופציונלי)
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="email"
-                        value={tempAdminEmail}
-                        onChange={(e) => setTempAdminEmail(e.target.value)}
-                        className="input flex-1"
-                        placeholder="admin@example.com"
-                      />
-                      <button
-                        onClick={() => updateSettings({ adminEmail: tempAdminEmail })}
-                        className="btn btn-primary px-4 py-2"
-                        disabled={tempAdminEmail === (settings.adminEmail || '')}
-                      >
-                        שמור
-                      </button>
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      גיבויים יישלחו אוטומטית לכתובת זו
-                    </p>
-                    <div className="mt-2 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                      <p className="text-sm text-yellow-800 font-medium mb-1">הגדרת שירות מייל:</p>
-                      <ul className="text-xs text-yellow-700 space-y-1">
-                        <li>• צור חשבון ב-<a href="https://resend.com" target="_blank" className="underline">Resend.com</a></li>
-                        <li>• קבל API Key</li>
-                        <li>• הוסף RESEND_API_KEY למשתני הסביבה</li>
-                        <li>• לחץ "בדוק שירות מייל" לוודא שהכל עובד</li>
-                      </ul>
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      סיסמת מנהל
-                    </label>
-                    <input
-                      type="text"
-                      value={settings.adminPassword}
-                      onChange={(e) => updateSettings({ adminPassword: e.target.value })}
-                      className="input"
-                    />
-                  </div>
-                  
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border">
-                    <div>
-                      <div className="font-bold text-blue-800">מצב הגשת טפסים</div>
-                      <div className="text-sm text-gray-600">{settings.submissionsLocked ? 'סגור — אי אפשר לשלוח טפסים' : 'פתוח — ניתן לשלוח טפסים'}</div>
-                    </div>
-                    <button onClick={toggleLockSubmissions} className={`btn ${settings.submissionsLocked ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'btn-secondary'}`}>
-                      {settings.submissionsLocked ? 'פתח הגשה' : 'נעל הגשה'}
-                    </button>
-                  </div>
-                  
-                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <h3 className="font-bold text-blue-800 mb-2">סטטיסטיקות</h3>
-                    <div className="grid grid-cols-3 gap-4 text-sm">
-                      <div>
-                        <span className="text-gray-600">משחקים:</span>
-                        <span className="font-bold text-blue-600 ml-2">{matches.length}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">משתתפים:</span>
-                        <span className="font-bold text-blue-600 ml-2">{leaderboard.length}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">קופה:</span>
-                        <span className="font-bold text-blue-600 ml-2">₪{pot.totalAmount}</span>
-                      </div>
-                      <div>
-                        <span className="text-gray-600">דמי השתתפות:</span>
-                        <span className="font-bold text-blue-600 ml-2">₪{pot.amountPerPlayer}</span>
-                      </div>
-                      <div className="col-span-2">
-                        <div className="text-red-600 font-bold text-sm">פרס ראשון בטוטו</div>
-                        <div className="text-red-600 font-bold text-lg">₪{(settings.totoFirstPrize || 8000000).toLocaleString()}</div>
-                        <div className="text-gray-600 text-sm">{pot.numOfPlayers} משתתפים</div>
-                        <div className="text-gray-600 text-sm">₪{pot.numOfPlayers > 0 ? ((settings.totoFirstPrize || 8000000) / pot.numOfPlayers).toLocaleString('he-IL', { maximumFractionDigits: 2 }) : '0'} למשתתף</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* הגדרת שעון רץ */}
-                  <div className="bg-gray-50 border rounded-lg p-4">
-                    <h3 className="font-bold text-blue-800 mb-2">שעון רץ</h3>
-                    <div className="flex items-center gap-2 mb-3">
-                      <input id="cdActive" type="checkbox" checked={countdownActiveLocal} onChange={(e)=>{setCountdownActiveLocal(e.target.checked);}} />
-                      <label htmlFor="cdActive" className="text-sm text-gray-700">הפעל שעון רץ</label>
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <input type="date" value={countdownDate} onChange={(e)=>{setCountdownDate(e.target.value);}} className="input w-40" />
-                      <input type="time" value={countdownTime} onChange={(e)=>{setCountdownTime(e.target.value);}} className="input w-32" />
-                      <button onClick={async ()=>{
-                        const target = (countdownDate && countdownTime) ? `${countdownDate}T${countdownTime}` : '';
-                        if (countdownActiveLocal && !target) { showToast('יש להזין תאריך ושעה ליעד', 'error'); return; }
-                        dataManager.updateSettings({ countdownActive: !!(countdownActiveLocal && target), countdownTarget: target });
-                        await (dataManager.mergeAndSave ? dataManager.mergeAndSave({ headers: getAdminHeaders(), preferLocalSettings: true }) : Promise.resolve());
-                        await dataManager.syncFromServer();
-                        loadAdminData();
-                        showToast('הגדרות שעון נשמרו');
-                      }} className="btn btn-secondary">שמור</button>
-                    </div>
-                    {countdownActiveLocal && countdownDate && countdownTime && (
-                      <div className="text-sm text-gray-600 mt-2">יעד: {countdownDate} {countdownTime}</div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* מודל שינוי שם */}
-      {showRenameModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-96 max-w-md mx-4">
-            <h3 className="text-lg font-bold text-gray-800 mb-4">שינוי שם משתמש</h3>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">שם נוכחי</label>
-                <input
-                  type="text"
-                  value={renameUser?.name || ''}
-                  disabled
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md bg-gray-100 text-gray-600"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">שם חדש</label>
-                <input
-                  type="text"
-                  value={newUserName}
-                  onChange={(e) => setNewUserName(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="הזן שם חדש"
-                  autoFocus
-                />
-              </div>
-            </div>
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => {
-                  setShowRenameModal(false);
-                  setRenameUser(null);
-                  setNewUserName('');
-                }}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-              >
-                ביטול
-              </button>
-              <button
-                onClick={handleRenameUser}
-                disabled={!newUserName.trim() || newUserName.trim() === renameUser?.name}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-              >
-                שנה שם
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* מודל עריכת ניחוש */}
-      {showEditGuessModal && editGuessUser && editGuessData && editGuessData.guesses && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <h3 className="text-xl font-bold text-gray-800 mb-4">
-              עריכת ניחוש - {editGuessUser.name}
-            </h3>
-            <div className="space-y-6">
-              {/* סיכום נוכחי */}
-              <div className="bg-gray-50 rounded-lg p-4">
-                <h4 className="font-bold text-gray-800 mb-2">ניחושים נוכחיים:</h4>
-                <div className="grid grid-cols-8 gap-2">
-                  {editGuessData.guesses.map((guess, index) => (
-                    <div key={index} className="text-center p-2 bg-white rounded border">
-                      <div className="text-xs text-gray-600">{index + 1}</div>
-                      <div className="text-lg font-bold">{guess || '?'}</div>
-                    </div>
-                  ))}
-                </div>
+          )}
+          
+          <AdminHeader 
+            isRefreshing={isRefreshing}
+            refreshAll={refreshAll}
+          />
+          
+          <AdminTabs activeTab={activeTab} setActiveTab={setActiveTab} />
+          {activeTab === 'matches' && (
+            <MatchesTab 
+              matches={matches}
+              uploadJSON={uploadJSON}
+              createDefaultMatches={createDefaultMatches}
+              clearAllMatches={clearAllMatches}
+              updateMatch={updateMatch}
+              deleteMatch={deleteMatch}
+              formatDateForInput={formatDateForInput}
+              formatDateDisplay={formatDateDisplay}
+            />
+          )}
+          {activeTab === 'participants' && (
+            <ParticipantsTab 
+              participantsWithGuess={sortedWeek}
+              sortWeek={sortWeek}
+              setSortWeek={setSortWeek}
+              clearAllGuessesForCurrentWeek={clearAllGuessesForCurrentWeek}
+              settings={settings}
+              updatePaymentStatus={updatePaymentStatus}
+              handleEditGuessClick={handleEditGuessClick}
+              deleteGuessById={deleteGuessById}
+              getScore={getScore}
+            />
+          )}
+          {activeTab === 'users' && (
+            <UsersTab 
+              participants={sortedAll}
+              sortAll={sortAll}
+              setSortAll={setSortAll}
+              byUserId={byUserId}
+              getScore={getScore}
+              openRenameModal={openRenameModal}
+              deleteUserCompletely={deleteUserCompletely}
+            />
+          )}
+          {activeTab === 'backups' && (
+            <BackupsTab 
+              sendBackupToEmail={sendBackupToEmail}
+              testEmailService={testEmailService}
+              resetLocalCache={resetLocalCache}
+              isLoading={isLoading}
+              settings={settings}
+              tempAdminEmail={tempAdminEmail}
+              setTempAdminEmail={setTempAdminEmail}
+              updateSettings={updateSettings}
+              showToast={showToast}
+            />
+          )}
+          
+          {activeTab === 'settings' && (
+            <SettingsTab 
+              settings={settings}
+              updateSettings={updateSettings}
+              debouncedUpdateSettings={debouncedUpdateSettings}
+              toggleLockSubmissions={toggleLockSubmissions}
+              tempAdminEmail={tempAdminEmail}
+              setTempAdminEmail={setTempAdminEmail}
+              matches={matches}
+              leaderboard={leaderboard}
+              pot={pot}
+              countdownActiveLocal={countdownActiveLocal}
+              setCountdownActiveLocal={setCountdownActiveLocal}
+              countdownDate={countdownDate}
+              setCountdownDate={setCountdownDate}
+              countdownTime={countdownTime}
+              setCountdownTime={setCountdownTime}
+              getAdminHeaders={getAdminHeaders}
+              dataManager={dataManager}
+              loadAdminData={loadAdminData}
+              showToast={showToast}
+            />
+          )}
               </div>
 
-              {/* עריכת ניחושים */}
-              <div>
-                <h4 className="font-bold text-gray-800 mb-4">ערוך ניחושים:</h4>
-                {matches.length === 0 ? (
-                  <div className="text-center py-8">
-                    <p className="text-gray-500">אין משחקים זמינים לעריכה</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    {matches.map((match, index) => (
-                    <div key={match.id} className="border rounded-lg p-4 bg-gray-50">
-                      <div className="text-center mb-3">
-                        <h5 className="font-bold text-blue-800 text-sm">משחק {index + 1}</h5>
-                        <div className="text-sm font-bold text-green-700">
-                          {match.homeTeam} vs {match.awayTeam}
-                        </div>
-                      </div>
-                      <div className="flex justify-center gap-2">
-                        {['1', 'X', '2'].map((option) => (
-                          <button
-                            key={option}
-                            type="button"
-                            onClick={() => handleGuessChange(index, option)}
-                            className={`w-10 h-10 rounded-full text-lg font-bold transition-all ${
-                              tempGuesses[index] === option
-                                ? 'bg-blue-500 text-white shadow-lg scale-110'
-                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                            }`}
-                          >
-                            {option}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+        <RenameUserModal 
+          showRenameModal={showRenameModal}
+          setShowRenameModal={setShowRenameModal}
+          renameUser={renameUser}
+          setRenameUser={setRenameUser}
+          newUserName={newUserName}
+          setNewUserName={setNewUserName}
+          handleRenameUser={handleRenameUser}
+        />
 
-              {/* סיכום חדש */}
-              <div className="bg-blue-50 rounded-lg p-4">
-                <h4 className="font-bold text-gray-800 mb-2">ניחושים חדשים:</h4>
-                <div className="grid grid-cols-8 gap-2">
-                  {tempGuesses.map((guess, index) => (
-                    <div key={index} className="text-center p-2 bg-white rounded border">
-                      <div className="text-xs text-gray-600">{index + 1}</div>
-                      <div className="text-lg font-bold">{guess || '?'}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-            
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={closeEditGuessModal}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
-              >
-                ביטול
-              </button>
-              <button
-                onClick={saveEditedGuess}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-              >
-                שמור שינויים
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+        <EditGuessModal 
+          showEditGuessModal={showEditGuessModal}
+          editGuessUser={editGuessUser}
+          editGuessData={editGuessData}
+          tempGuesses={tempGuesses}
+          handleGuessChange={handleGuessChange}
+          closeEditGuessModal={closeEditGuessModal}
+          saveEditedGuess={saveEditedGuess}
+          matches={matches}
+        />
     </div>
     </>
   );

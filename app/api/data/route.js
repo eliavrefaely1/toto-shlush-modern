@@ -1,23 +1,29 @@
-import { kv } from '@vercel/kv'
 import { NextResponse } from 'next/server'
-import { Redis } from '@upstash/redis'
+
+// Setup KV instance (Vercel KV or local mock)
+let kvInstance = null
+
+const setupKV = async () => {
+  if (kvInstance) return kvInstance
+  
+  try {
+    // Try to use Vercel KV if available
+    const { kv } = await import('@vercel/kv')
+    await kv.get('test') // Test if KV is working
+    kvInstance = kv
+    console.log('Using Vercel KV')
+  } catch (error) {
+    console.log('Vercel KV not available, using local mock')
+    const { kv: localKV } = await import('../../lib/local-kv.js')
+    kvInstance = localKV
+  }
+  
+  return kvInstance
+}
 
 // Ensure fresh responses
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
-
-// Lazy init Redis only if env exists, and never throw at import time
-let redis = null
-try {
-  if (
-    process.env.UPSTASH_REDIS_REST_URL &&
-    process.env.UPSTASH_REDIS_REST_TOKEN
-  ) {
-    redis = Redis.fromEnv()
-  }
-} catch (_) {
-  redis = null
-}
 
 const KEY = 'toto:data:v1'
 // Split-keys (progressive enhancement; keeps backward compatibility)
@@ -42,13 +48,14 @@ const defaultData = {
 
 export const POST = async (req) => {
   try {
+    await setupKV()
     const { action } = await req.json()
     
     if (action === 'status') {
       // בדיקת סטטוס הטבלאות
-      const raw = (await kv.get(KEY)) || defaultData
-      const meta = await kv.get(META_KEY).catch(()=>null)
-      const users = await kv.get(USERS_KEY).catch(()=>null)
+      const raw = (await kvInstance.get(KEY)) || defaultData
+      const meta = await kvInstance.get(META_KEY).catch(()=>null)
+      const users = await kvInstance.get(USERS_KEY).catch(()=>null)
       
       let status = {
         mainTable: {
@@ -119,16 +126,16 @@ export const POST = async (req) => {
       // ניקוי מלא של כל הנתונים
       try {
         // מחק את הטבלה הראשית
-        await kv.del(KEY)
+        await kvInstance.del(KEY)
         
         // מחק את הטבלאות המפוצלות
-        await kv.del(META_KEY)
-        await kv.del(USERS_KEY)
+        await kvInstance.del(META_KEY)
+        await kvInstance.del(USERS_KEY)
         
         // מחק טבלאות שבועות (1-10)
         for (let w = 1; w <= 10; w++) {
-          await kv.del(MATCHES_KEY(w))
-          await kv.del(GUESSES_KEY(w))
+          await kvInstance.del(MATCHES_KEY(w))
+          await kvInstance.del(GUESSES_KEY(w))
         }
         
         return new Response(JSON.stringify({ 
@@ -153,7 +160,7 @@ export const POST = async (req) => {
         return new Response(JSON.stringify({ ok: false, error: 'Unauthorized' }), { status: 401 })
       }
       
-      const raw = (await kv.get(KEY)) || defaultData
+      const raw = (await kvInstance.get(KEY)) || defaultData
       let cleaned = 0
       
       // ניקוי משתמשים כפולים וחסרי ID
@@ -219,7 +226,7 @@ export const POST = async (req) => {
       }
       
       // שמירה מחדש עם הטבלאות המפוצלות
-      await kv.set(KEY, raw)
+      await kvInstance.set(KEY, raw)
       
       // עדכון הטבלאות המפוצלות
       const metaToSave = {
@@ -230,19 +237,19 @@ export const POST = async (req) => {
         countdownActive: !!raw.countdownActive,
         countdownTarget: raw.countdownTarget || ''
       }
-      await kv.set(META_KEY, metaToSave)
+      await kvInstance.set(META_KEY, metaToSave)
       
       if (Array.isArray(raw.users)) {
-        await kv.set(USERS_KEY, raw.users)
+        await kvInstance.set(USERS_KEY, raw.users)
       }
       
       // עדכון טבלאות
       if (Array.isArray(raw.matches)) {
-        await kv.set(MATCHES_KEY(1), raw.matches)
+        await kvInstance.set(MATCHES_KEY(1), raw.matches)
       }
       
       if (Array.isArray(raw.userGuesses)) {
-        await kv.set(GUESSES_KEY(1), raw.userGuesses)
+        await kvInstance.set(GUESSES_KEY(1), raw.userGuesses)
       }
       
       return new Response(JSON.stringify({ 
@@ -252,10 +259,8 @@ export const POST = async (req) => {
       }), { status: 200 })
     }
     
-    // Redis test (original functionality)
-    if (!redis) return new NextResponse(JSON.stringify({ ok: false, error: 'Redis not configured' }), { status: 503 })
-    const result = await redis.get('item')
-    return new NextResponse(JSON.stringify({ result }), { status: 200 })
+    // Default response for unknown actions
+    return new NextResponse(JSON.stringify({ ok: false, error: 'Unknown action' }), { status: 400 })
   } catch (e) {
     return new NextResponse(JSON.stringify({ ok: false, error: 'Redis error' }), { status: 500 })
   }
@@ -263,13 +268,14 @@ export const POST = async (req) => {
 
 export async function GET(request) {
   try {
+    await setupKV()
     const { searchParams } = new URL(request.url)
     if (searchParams.get('diag') === '1') {
       // החזר סטטוס משתני סביבה ואיתור המפתח ב‑KV כדי לאבחן
       let kvOk = false
       let kvHasKey = false
       try {
-        const probe = await kv.get(KEY)
+        const probe = await kvInstance.get(KEY)
         kvOk = true
         kvHasKey = !!probe && typeof probe === 'object' && Object.keys(probe).length > 0
       } catch (_) {}
@@ -291,7 +297,7 @@ export async function GET(request) {
       }, { headers: { 'Cache-Control': 'no-store' } })
     }
 
-    const raw = (await kv.get(KEY)) || defaultData
+    const raw = (await kvInstance.get(KEY)) || defaultData
     const fieldsParam = searchParams.get('fields') || searchParams.get('only')
     const wanted = fieldsParam ? new Set(fieldsParam.split(',').map(s => s.trim())) : null
 
@@ -303,8 +309,8 @@ export async function GET(request) {
 
     // Try split-keys first for faster/smaller payload
     const [wkMatches, wkGuesses] = await Promise.all([
-      kv.get(MATCHES_KEY(1)).catch(()=>null),
-      kv.get(GUESSES_KEY(1)).catch(()=>null)
+      kvInstance.get(MATCHES_KEY(1)).catch(()=>null),
+      kvInstance.get(GUESSES_KEY(1)).catch(()=>null)
     ])
     if (Array.isArray(wkMatches)) {
       data.matches = wkMatches
@@ -325,7 +331,7 @@ export async function GET(request) {
     if (wanted) {
       const filtered = {}
       if (wanted.has('settings')) {
-        const meta = await kv.get(META_KEY).catch(()=>null)
+        const meta = await kvInstance.get(META_KEY).catch(()=>null)
         filtered.adminPassword = meta?.adminPassword ?? raw.adminPassword
         filtered.entryFee = meta?.entryFee ?? raw.entryFee
         filtered.totoFirstPrize = meta?.totoFirstPrize ?? raw.totoFirstPrize ?? 8000000
@@ -336,7 +342,7 @@ export async function GET(request) {
       if (wanted.has('matches')) filtered.matches = data.matches || []
       if (wanted.has('guesses') || wanted.has('userGuesses')) filtered.userGuesses = data.userGuesses || []
       if (wanted.has('users')) {
-        const users = await kv.get(USERS_KEY).catch(()=>null)
+        const users = await kvInstance.get(USERS_KEY).catch(()=>null)
         filtered.users = Array.isArray(users) ? users : (raw.users || [])
       }
       if (wanted.has('pots')) filtered.pots = raw.pots || []
@@ -356,8 +362,9 @@ export async function GET(request) {
 
 export async function PUT(req) {
   try {
+    await setupKV()
     const incoming = await req.json()
-    const current = (await kv.get(KEY)) || defaultData
+    const current = (await kvInstance.get(KEY)) || defaultData
     const ADMIN_TOKEN = process.env.ADMIN_TOKEN || process.env.X_ADMIN_TOKEN
     const action = (req.headers.get('x-action') || '').toLowerCase()
     const token = req.headers.get('x-admin-token')
@@ -390,7 +397,7 @@ export async function PUT(req) {
     if (toSave.countdownActive && !toSave.countdownTarget) {
       toSave.countdownActive = false
     }
-    await kv.set(KEY, toSave)
+    await kvInstance.set(KEY, toSave)
 
     // Also persist split-keys for faster targeted reads
     const metaToSave = {
@@ -401,17 +408,17 @@ export async function PUT(req) {
       countdownActive: !!toSave.countdownActive,
       countdownTarget: toSave.countdownTarget || ''
     }
-    try { await kv.set(META_KEY, metaToSave) } catch (_) {}
+    try { await kvInstance.set(META_KEY, metaToSave) } catch (_) {}
 
     if (Array.isArray(toSave.users)) {
-      try { await kv.set(USERS_KEY, toSave.users) } catch (_) {}
+      try { await kvInstance.set(USERS_KEY, toSave.users) } catch (_) {}
     }
 
     if (Array.isArray(toSave.matches)) {
-      try { await kv.set(MATCHES_KEY(1), toSave.matches) } catch (_) {}
+      try { await kvInstance.set(MATCHES_KEY(1), toSave.matches) } catch (_) {}
     }
     if (Array.isArray(toSave.userGuesses)) {
-      try { await kv.set(GUESSES_KEY(1), toSave.userGuesses) } catch (_) {}
+      try { await kvInstance.set(GUESSES_KEY(1), toSave.userGuesses) } catch (_) {}
     }
     return Response.json({ ok: true }, {
       headers: { 'Cache-Control': 'no-store' }

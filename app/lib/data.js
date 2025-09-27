@@ -3,7 +3,6 @@ class DataManager {
   constructor() {
     this._isInitialized = false;
     this._lastBackupTime = null;
-    this._backupInterval = 5 * 60 * 1000; // 5 דקות
   }
 
   generateId() {
@@ -12,22 +11,27 @@ class DataManager {
   }
 
   // גיבוי אוטומטי
-  async createAutoBackup() {
+  async createAutoBackup(triggerAction = 'Unknown action', forceBackup = false) {
     try {
       const now = Date.now();
       
-      // בדיקה אם עבר מספיק זמן מהגיבוי האחרון
-      if (this._lastBackupTime && (now - this._lastBackupTime) < this._backupInterval) {
-        return; // לא צריך גיבוי עדיין
+      // הוסף delay קטן כדי למנוע rate limiting (רק אם יש גיבוי אחרון לפני פחות מ-2 שניות)
+      if (this._lastBackupTime && (now - this._lastBackupTime) < 2000) {
+        console.log('Adding delay to prevent rate limiting...');
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
 
-      console.log('Creating automatic backup...');
+      console.log(`Creating automatic backup triggered by: ${triggerAction}`);
       
-      const response = await fetch('/api/backup?action=create', {
-        method: 'GET',
+      const response = await fetch('/api/backup', {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify({
+          action: 'create',
+          triggerAction: triggerAction
+        })
       });
 
       if (response.ok) {
@@ -86,8 +90,10 @@ class DataManager {
       });
       
       if (response.ok) {
-        // יצירת גיבוי אוטומטי לאחר שמירה מוצלחת
-        this.createAutoBackup();
+        // יצירת גיבוי אוטומטי לאחר שמירה מוצלחת (רק אם לא נועד לקריאה חיצונית)
+        if (!options.skipAutoBackup) {
+          await this.createAutoBackup(options.triggerAction || 'נתונים נשמרו בשרת');
+        }
         return true;
       }
     } catch (error) {
@@ -179,7 +185,7 @@ class DataManager {
       const afterGuesses = this.data.userGuesses?.length || 0;
       console.log(`DataManager.normalizeData: Cleaned up data - Users: ${beforeUsers} → ${afterUsers}, Guesses: ${beforeGuesses} → ${afterGuesses}`);
       // שמירה בשרת במקום localStorage
-      this.saveDataToServer();
+      this.saveDataToServer(this.data, { skipAutoBackup: true });
     }
   }
 
@@ -244,7 +250,7 @@ class DataManager {
         this.data.deletedGuessKeys = []
         this.data.deletedUsers = []
         // יצירת גיבוי אוטומטי לאחר שמירה מוצלחת
-        this.createAutoBackup()
+        await this.createAutoBackup('נתונים עודכנו ונשמרו')
         return true
       }
     } catch (err) {
@@ -390,7 +396,9 @@ class DataManager {
     // טען נתונים מהשרת
     const data = await this.loadDataFromServer();
     data.matches.push(newMatch);
-    await this.saveDataToServer(data);
+    await this.saveDataToServer(data, { 
+      triggerAction: `משחק חדש נוסף: ${newMatch.homeTeam} vs ${newMatch.awayTeam}`
+    });
     return newMatch;
   }
 
@@ -398,8 +406,12 @@ class DataManager {
     const data = await this.loadDataFromServer();
     const matchIndex = data.matches.findIndex(m => m.id === matchId);
     if (matchIndex !== -1) {
+      const match = data.matches[matchIndex];
       data.matches[matchIndex] = { ...data.matches[matchIndex], ...updates, updatedAt: new Date().toISOString() };
-      await this.saveDataToServer(data);
+      const action = updates.result ? `תוצאה עודכנה: ${match.homeTeam} vs ${match.awayTeam} = ${updates.result}` : `משחק עודכן: ${match.homeTeam} vs ${match.awayTeam}`;
+      await this.saveDataToServer(data, {
+        triggerAction: action
+      });
       return data.matches[matchIndex];
     }
     return null;
@@ -408,13 +420,17 @@ class DataManager {
   async deleteMatch(matchId) {
     const data = await this.loadDataFromServer();
     data.matches = data.matches.filter(m => m.id !== matchId);
-    await this.saveDataToServer(data);
+    await this.saveDataToServer(data, { 
+      triggerAction: `משחק נמחק`
+    });
   }
 
   async clearAllMatches() {
     const data = await this.loadDataFromServer();
     data.matches = [];
-    await this.saveDataToServer(data);
+    await this.saveDataToServer(data, { 
+      triggerAction: `כל המשחקים נמחקו`
+    });
   }
 
   // ניהול משתמשים
@@ -440,7 +456,9 @@ class DataManager {
       paymentStatus: 'unpaid'
     };
     data.users.push(newUser);
-    await this.saveDataToServer(data);
+    await this.saveDataToServer(data, {
+      triggerAction: `משתמש חדש נרשם: ${user.name}`
+    });
     return newUser;
   }
 
@@ -463,7 +481,7 @@ class DataManager {
       const now = new Date().toISOString();
       data.users[userIndex].paymentStatus = paymentStatus;
       data.users[userIndex].updatedAt = now;
-      await this.saveDataToServer(data);
+      await this.saveDataToServer(data, { skipAutoBackup: true });
       return data.users[userIndex];
     }
     return null;
@@ -503,7 +521,7 @@ class DataManager {
     });
     
     // שמור בשרת
-    await this.saveDataToServer(data);
+    await this.saveDataToServer(data, { skipAutoBackup: true });
     
     return user;
   }
@@ -560,7 +578,9 @@ class DataManager {
     data.userGuesses = (data.userGuesses || []).filter(g => !(g.userId === target.id || (String(g.name||'').toLowerCase().trim() === nameLower)));
     const guessesRemoved = beforeGuesses - data.userGuesses.length;
 
-    await this.saveDataToServer(data);
+    await this.saveDataToServer(data, {
+      triggerAction: `משתמש נמחק: ${target.name}`
+    });
     return { usersRemoved: beforeUsers - data.users.length, guessesRemoved };
   }
 
@@ -588,7 +608,14 @@ class DataManager {
     // טען נתונים מהשרת
     const data = await this.loadDataFromServer();
     
+    // ספור ניחושים לפני
+    const guessesBefore = (data.userGuesses || []).length;
+    
     // מחיקת ניחוש קודם אם קיים
+    const hadPreviousGuess = (data.userGuesses || []).some(
+      g => (g.userId === newGuess.userId || (g.name||'').toLowerCase().trim() === (newGuess.name||'').toLowerCase().trim())
+    );
+    
     data.userGuesses = (data.userGuesses || []).filter(
       g => !(
         (g.userId === newGuess.userId || (g.name||'').toLowerCase().trim() === (newGuess.name||'').toLowerCase().trim())
@@ -596,7 +623,20 @@ class DataManager {
     );
 
     data.userGuesses.push(newGuess);
-    await this.saveDataToServer(data);
+    
+    // ספור ניחושים אחרי
+    const guessesAfter = data.userGuesses.length;
+    
+    // יצירת הודעה מפורטת
+    const actionMessage = hadPreviousGuess 
+      ? `ניחוש עודכן - ${guess.name} (${guessesBefore} ניחושים)`
+      : `ניחוש חדש - ${guess.name} (${guessesBefore} → ${guessesAfter} ניחושים)`;
+    
+    // שמירה עם פרטי הפעולה
+    const success = await this.saveDataToServer(data, {
+      triggerAction: actionMessage
+    });
+    
     return newGuess;
   }
 
@@ -605,7 +645,7 @@ class DataManager {
     const guessIndex = data.userGuesses.findIndex(g => g.id === guessId);
     if (guessIndex !== -1) {
       data.userGuesses[guessIndex] = { ...data.userGuesses[guessIndex], ...updates, updatedAt: new Date().toISOString() };
-      await this.saveDataToServer(data);
+      await this.saveDataToServer(data, { skipAutoBackup: true });
       return data.userGuesses[guessIndex];
     }
     return null;
@@ -619,7 +659,7 @@ class DataManager {
       const now = new Date().toISOString();
       data.userGuesses[guessIndex].paymentStatus = paymentStatus;
       data.userGuesses[guessIndex].updatedAt = now;
-      await this.saveDataToServer(data);
+      await this.saveDataToServer(data, { skipAutoBackup: true });
       return data.userGuesses[guessIndex];
     }
     return null;
@@ -636,7 +676,11 @@ class DataManager {
     }
     data.userGuesses = data.userGuesses.filter(g => g.id !== guessId);
     const after = data.userGuesses.length;
-    if (after !== before) await this.saveDataToServer(data);
+    if (after !== before) {
+      await this.saveDataToServer(data, {
+        triggerAction: `ניחוש נמחק: ${toDelete?.name || 'משתמש לא ידוע'}`
+      });
+    }
     return before - after;
   }
 
@@ -665,7 +709,11 @@ class DataManager {
     });
 
     const after = data.userGuesses.length;
-    if (after !== before) await this.saveDataToServer(data);
+    if (after !== before) {
+      await this.saveDataToServer(data, {
+        triggerAction: `כל הניחושים נמחקו עבור: ${nameLower || 'משתמש לא ידוע'}`
+      });
+    }
     return before - after;
   }
 
@@ -678,7 +726,11 @@ class DataManager {
     })
     this.data.userGuesses = [];
     const after = this.data.userGuesses.length;
-    if (after !== before) await this.saveDataToServer();
+    if (after !== before) {
+      await this.saveDataToServer(this.data, {
+        triggerAction: `כל הניחושים נמחקו (${before} ניחושים)`
+      });
+    }
     return before - after;
   }
 
@@ -769,7 +821,7 @@ class DataManager {
       data.adminEmail = settings.adminEmail;
     }
     // שמור בשרת
-    await this.saveDataToServer(data);
+    await this.saveDataToServer(data, { skipAutoBackup: true });
   }
 
   // אימות מנהל

@@ -100,6 +100,7 @@ export async function POST(request) {
 
     // יצירת תוכן המייל
     const timestamp = new Date(backupData.timestamp || new Date().toISOString()).toLocaleString('he-IL')
+    const triggerAction = backupData.triggerAction || 'פעולה לא ידועה'
     const subject = `גיבוי נתונים - טוטו שלוש - ${timestamp}`
     
     const htmlContent = `
@@ -135,6 +136,7 @@ export async function POST(request) {
               <p><strong>תאריך יצירה:</strong> ${timestamp}</p>
               <p><strong>מזהה גיבוי:</strong> ${backupData.backupId || 'N/A'}</p>
               <p><strong>גרסה:</strong> ${backupData.version || '2.0'}</p>
+              <p><strong>פעולה שגרמה לגיבוי:</strong> <span style="color: #2563eb; font-weight: bold;">${triggerAction}</span></p>
             </div>
 
             <div class="stats">
@@ -185,6 +187,7 @@ ${timestamp}
 - תאריך: ${timestamp}
 - מזהה: ${backupData.backupId || 'N/A'}
 - גרסה: ${backupData.version || '2.0'}
+- פעולה שגרמה לגיבוי: ${triggerAction}
 
 תוכן הגיבוי:
 - נתונים ראשיים: ${backupData.mainData ? 'נשמר' : 'לא זמין'}

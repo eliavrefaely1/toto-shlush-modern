@@ -33,8 +33,15 @@ export default function BackupManager() {
       setLoading(true)
       setMessage('יוצר גיבוי...')
       
-      const response = await fetch('/api/backup?action=create', {
-        method: 'GET'
+      const response = await fetch('/api/backup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          action: 'create',
+          triggerAction: 'Manual backup from backup manager'
+        })
       })
       const result = await response.json()
       
@@ -100,8 +107,7 @@ export default function BackupManager() {
       const response = await fetch('/api/backup', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-admin-token': prompt('הזן טוקן אדמין:') || ''
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           action: 'restore',

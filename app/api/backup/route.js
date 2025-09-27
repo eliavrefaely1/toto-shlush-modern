@@ -1,6 +1,22 @@
 import { kv } from '@vercel/kv'
 import { NextResponse } from 'next/server'
 
+// Fallback to local KV for development
+let kvInstance = kv
+
+// Test if Vercel KV is available and set up fallback
+const setupKV = async () => {
+  try {
+    // Test if Vercel KV is available
+    await kv.get('test')
+    kvInstance = kv
+  } catch (error) {
+    console.log('Vercel KV not available, using local mock')
+    const { kv: localKV } = await import('../../lib/local-kv.js')
+    kvInstance = localKV
+  }
+}
+
 // Ensure fresh responses
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
@@ -17,23 +33,24 @@ const BACKUP_LIST_KEY = 'toto:backups:list'
 const BACKUP_KEY = (timestamp) => `toto:backup:${timestamp}`
 
 // יצירת גיבוי מלא
-const createFullBackup = async () => {
+const createFullBackup = async (triggerAction = 'Manual backup') => {
   try {
+    await setupKV()
     const timestamp = new Date().toISOString()
     const backupId = timestamp.replace(/[:.]/g, '-')
 
     // קבלת כל הנתונים
     const [mainData, metaData, usersData] = await Promise.all([
-      kv.get(KEY).catch(() => null),
-      kv.get(META_KEY).catch(() => null),
-      kv.get(USERS_KEY).catch(() => null)
+      kvInstance.get(KEY).catch(() => null),
+      kvInstance.get(META_KEY).catch(() => null),
+      kvInstance.get(USERS_KEY).catch(() => null)
     ])
 
     // קבלת נתונים לפי שבועות (רק שבוע 1 עכשיו)
     const weekData = {}
     const [matches, guesses] = await Promise.all([
-      kv.get(MATCHES_KEY(1)).catch(() => null),
-      kv.get(GUESSES_KEY(1)).catch(() => null)
+      kvInstance.get(MATCHES_KEY(1)).catch(() => null),
+      kvInstance.get(GUESSES_KEY(1)).catch(() => null)
     ])
     
     if (matches || guesses) {
@@ -49,14 +66,15 @@ const createFullBackup = async () => {
       usersData,
       weekData,
       version: '2.0',
-      created: new Date().toISOString()
+      created: new Date().toISOString(),
+      triggerAction: triggerAction
     }
 
     // שמירת הגיבוי
-    await kv.set(BACKUP_KEY(backupId), backupData)
+    await kvInstance.set(BACKUP_KEY(backupId), backupData)
 
     // עדכון רשימת הגיבויים
-    const backupList = await kv.get(BACKUP_LIST_KEY) || []
+    const backupList = await kvInstance.get(BACKUP_LIST_KEY) || []
     const newBackupInfo = {
       id: backupId,
       timestamp,
@@ -75,31 +93,39 @@ const createFullBackup = async () => {
     
     // שמור רק 50 הגיבויים האחרונים
     const trimmedList = backupList.slice(0, 50)
-    await kv.set(BACKUP_LIST_KEY, trimmedList)
+    await kvInstance.set(BACKUP_LIST_KEY, trimmedList)
 
     // שליחת מייל אוטומטית (אם מוגדר)
     const adminEmail = process.env.ADMIN_EMAIL || metaData?.adminEmail
+    console.log('Backup email check:', { 
+      adminEmail, 
+      hasAdminEmail: !!adminEmail,
+      envAdminEmail: process.env.ADMIN_EMAIL,
+      metaAdminEmail: metaData?.adminEmail 
+    })
+    
     if (adminEmail) {
       try {
         const baseUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3001'
+        console.log('Sending backup email to:', adminEmail, 'via:', `${baseUrl}/api/send-email`)
+        
         const emailResponse = await fetch(`${baseUrl}/api/send-email`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            backupData: {
-              ...backupData,
-              files: newBackupInfo.files
-            },
+            backupData: backupData,
             recipientEmail: adminEmail
           })
         })
         
         if (emailResponse.ok) {
-          console.log('Backup email sent successfully to:', adminEmail)
+          const emailResult = await emailResponse.json()
+          console.log('Backup email sent successfully to:', adminEmail, 'Result:', emailResult)
         } else {
-          console.error('Failed to send backup email:', await emailResponse.text())
+          const errorText = await emailResponse.text()
+          console.error('Failed to send backup email:', errorText)
         }
       } catch (emailError) {
         console.error('Error sending backup email:', emailError)
@@ -116,7 +142,9 @@ const createFullBackup = async () => {
         metaData: !!metaData,
         usersData: !!usersData,
         weeks: Object.keys(weekData).length
-      }
+      },
+      // הוסף את הנתונים המלאים לתגובה
+      fullBackupData: backupData
     }
   } catch (error) {
     console.error('Error creating backup:', error)
@@ -130,8 +158,9 @@ const createFullBackup = async () => {
 // שחזור נתונים מגיבוי
 const restoreFromBackup = async (backupId) => {
   try {
+    await setupKV()
     // טעינת נתוני הגיבוי
-    const backupData = await kv.get(BACKUP_KEY(backupId))
+    const backupData = await kvInstance.get(BACKUP_KEY(backupId))
     if (!backupData) {
       return {
         success: false,
@@ -143,17 +172,17 @@ const restoreFromBackup = async (backupId) => {
 
     // שחזור נתונים ראשיים
     if (mainData) {
-      await kv.set(KEY, mainData)
+      await kvInstance.set(KEY, mainData)
     }
 
     // שחזור נתוני מטא
     if (metaData) {
-      await kv.set(META_KEY, metaData)
+      await kvInstance.set(META_KEY, metaData)
     }
 
     // שחזור נתוני משתמשים
     if (usersData) {
-      await kv.set(USERS_KEY, usersData)
+      await kvInstance.set(USERS_KEY, usersData)
     }
 
     // שחזור נתונים לפי שבועות
@@ -161,10 +190,10 @@ const restoreFromBackup = async (backupId) => {
       for (const [week, data] of Object.entries(weekData)) {
         const weekNum = parseInt(week)
         if (data.matches) {
-          await kv.set(MATCHES_KEY(weekNum), data.matches)
+          await kvInstance.set(MATCHES_KEY(weekNum), data.matches)
         }
         if (data.guesses) {
-          await kv.set(GUESSES_KEY(weekNum), data.guesses)
+          await kvInstance.set(GUESSES_KEY(weekNum), data.guesses)
         }
       }
     }
@@ -190,7 +219,8 @@ const restoreFromBackup = async (backupId) => {
 // רשימת גיבויים קיימים
 const listBackups = async () => {
   try {
-    const backupList = await kv.get(BACKUP_LIST_KEY) || []
+    await setupKV()
+    const backupList = await kvInstance.get(BACKUP_LIST_KEY) || []
     
     return {
       success: true,
@@ -208,13 +238,14 @@ const listBackups = async () => {
 // מחיקת גיבוי ישן
 const deleteBackup = async (backupId) => {
   try {
+    await setupKV()
     // מחיקת הגיבוי מ-KV
-    await kv.del(BACKUP_KEY(backupId))
+    await kvInstance.del(BACKUP_KEY(backupId))
     
     // עדכון רשימת הגיבויים
-    const backupList = await kv.get(BACKUP_LIST_KEY) || []
+    const backupList = await kvInstance.get(BACKUP_LIST_KEY) || []
     const updatedList = backupList.filter(backup => backup.id !== backupId)
-    await kv.set(BACKUP_LIST_KEY, updatedList)
+    await kvInstance.set(BACKUP_LIST_KEY, updatedList)
 
     return {
       success: true,
@@ -240,7 +271,7 @@ export async function GET(request) {
         return NextResponse.json(listResult)
       
       case 'create':
-        const result = await createFullBackup()
+        const result = await createFullBackup('Manual backup via GET request')
         return NextResponse.json(result)
       
       default:
@@ -263,14 +294,6 @@ export async function POST(request) {
     const ADMIN_TOKEN = process.env.ADMIN_TOKEN || process.env.X_ADMIN_TOKEN
     const token = request.headers.get('x-admin-token')
 
-    // אבטחה: דרוש טוקן אדמין לפעולות רגישות
-    if (ADMIN_TOKEN && (!token || token !== ADMIN_TOKEN)) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Unauthorized' 
-      }, { status: 401 })
-    }
-
     switch (action) {
       case 'restore':
         if (!backupId) {
@@ -284,6 +307,14 @@ export async function POST(request) {
         return NextResponse.json(restoreResult)
       
       case 'delete':
+        // מחיקה דורשת טוקן אדמין (פעולה רגישה)
+        if (ADMIN_TOKEN && (!token || token !== ADMIN_TOKEN)) {
+          return NextResponse.json({ 
+            success: false, 
+            error: 'Unauthorized' 
+          }, { status: 401 })
+        }
+        
         if (!backupId) {
           return NextResponse.json({
             success: false,
@@ -295,7 +326,8 @@ export async function POST(request) {
         return NextResponse.json(deleteResult)
       
       case 'create':
-        const createResult = await createFullBackup()
+        const { triggerAction } = await request.json().catch(() => ({}))
+        const createResult = await createFullBackup(triggerAction || 'Manual backup')
         return NextResponse.json(createResult)
       
       default:

@@ -197,14 +197,14 @@ export default function GuessPage() {
                         משחק {currentMatchIndex + 1}
                       </h3> */}
                       <div className="text-sm font-bold text-gray-600 mb-2 text-center">
-                        <span>{matches[currentMatchIndex]?.league}</span>
+                        <span>{matches[currentMatchIndex]?.league || 'ליגה'}</span>
                         <br />
-                        <span>יום {matches[currentMatchIndex]?.day}</span> 
+                        <span>יום {matches[currentMatchIndex]?.day || 'יום'}</span> 
                         <span> - </span> 
-                        <span>{matches[currentMatchIndex]?.time}</span> 
+                        <span>{matches[currentMatchIndex]?.time || 'שעה'}</span> 
                       </div>
                       <div className="text-xl font-bold text-blue-900 mb-6 text-center">
-                        {matches[currentMatchIndex]?.homeTeam} VS {matches[currentMatchIndex]?.awayTeam}
+                        {matches[currentMatchIndex]?.homeTeam || 'קבוצה בית'} VS {matches[currentMatchIndex]?.awayTeam || 'קבוצה חוץ'}
                       </div>
                       
                       <div className="flex justify-center gap-4">
