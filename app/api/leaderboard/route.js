@@ -1,54 +1,27 @@
-import { kv } from '@vercel/kv'
+import { dataManager } from '../../../src/lib/data-manager'
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-const KEY = 'toto:data:v1'
-const META_KEY = 'toto:meta:v1'
-const USERS_KEY = 'toto:users:v1'
-const MATCHES_KEY = (w) => `toto:week:${w}:matches:v1`
-const GUESSES_KEY = (w) => `toto:week:${w}:guesses:v1`
-
 export async function GET(request) {
   try {
-    const [users, wkMatches, wkGuesses, raw] = await Promise.all([
-      kv.get(USERS_KEY).catch(()=>null),
-      kv.get(MATCHES_KEY(1)).catch(()=>null),
-      kv.get(GUESSES_KEY(1)).catch(()=>null),
-      kv.get(KEY).catch(()=>null)
-    ])
-
-    const matches = Array.isArray(wkMatches) ? wkMatches : (Array.isArray(raw?.matches) ? raw.matches : [])
-    const guesses = Array.isArray(wkGuesses) ? wkGuesses : (Array.isArray(raw?.userGuesses) ? raw.userGuesses : [])
-    const usersArr = Array.isArray(users) ? users : (Array.isArray(raw?.users) ? raw.users : [])
-    const byId = new Map(usersArr.map(u => [u.id, u]))
+    // השתמש ב-DataManager החדש במקום KV הישן
+    const leaderboard = await dataManager.getLeaderboard();
     
-
-    // Compute scores (ensure up-to-date with latest match results)
-    const results = matches.map(m => m.result || '')
-    const leaderboard = guesses.map(g => {
-      let score = 0
-      for (let i=0;i<results.length;i++) {
-        if (results[i] && g.guesses?.[i] === results[i]) score++
-      }
-      const u = byId.get(g.userId)
-      // מצב השולם עכשיו מגיע מהניחוש עצמו, לא מהמשתמש
-      const finalPaymentStatus = g.paymentStatus || 'unpaid';
-      
-      return {
-        id: g.id,
-        userId: g.userId,
-        name: u?.name || g.name,
-        phone: u?.phone || g.phone,
-        paymentStatus: finalPaymentStatus,
-        score,
-        user: u || { name: g.name, phone: g.phone, paymentStatus: finalPaymentStatus }
-      }
-    }).sort((a,b)=>b.score - a.score)
-
-    return Response.json({ count: leaderboard.length, leaderboard }, { headers: { 'Cache-Control': 'no-store' } })
+    return Response.json({ 
+      count: leaderboard.length, 
+      leaderboard 
+    }, { 
+      headers: { 'Cache-Control': 'no-store' } 
+    })
   } catch (err) {
-    return Response.json({ leaderboard: [] }, { headers: { 'Cache-Control': 'no-store' } })
+    console.error('Error loading leaderboard:', err);
+    return Response.json({ 
+      leaderboard: [], 
+      error: err.message 
+    }, { 
+      headers: { 'Cache-Control': 'no-store' } 
+    })
   }
 }
 

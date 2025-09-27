@@ -2,8 +2,8 @@
 
 import React from 'react';
 import { useHomeData } from '@/hooks/useHomeData';
-import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { LoadingSpinner } from '@/components/LoadingSpinner';
+import ErrorBoundary from '@/components/ErrorBoundary';
+import LoadingSpinner from '@/components/LoadingSpinner';
 import { ToastProvider } from '@/contexts/ToastContext';
 
 // Example of how to use the new refactored system

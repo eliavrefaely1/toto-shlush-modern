@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Shield, Eye, EyeOff, ArrowLeft } from 'lucide-react';
-import dataManager from '../lib/data.js';
+import { dataManager } from '../../src/lib/data-manager';
 
 // Import components
 import AdminHeader from './components/AdminHeader';

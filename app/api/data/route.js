@@ -1,4 +1,26 @@
 import { NextResponse } from 'next/server'
+import { dataManager } from '../../../src/lib/data-manager'
+
+// Rate limiting storage
+const rateLimitMap = new Map()
+
+const checkRateLimit = (ip, limit = 100, windowMs = 60000) => {
+  const now = Date.now()
+  const key = ip
+  const current = rateLimitMap.get(key)
+  
+  if (!current || now > current.resetTime) {
+    rateLimitMap.set(key, { count: 1, resetTime: now + windowMs })
+    return true
+  }
+  
+  if (current.count >= limit) {
+    return false
+  }
+  
+  current.count++
+  return true
+}
 
 // Setup KV instance (Vercel KV or local mock)
 let kvInstance = null
@@ -268,18 +290,47 @@ export const POST = async (req) => {
 
 export async function GET(request) {
   try {
-    await setupKV()
-    const { searchParams } = new URL(request.url)
-    if (searchParams.get('diag') === '1') {
-      // החזר סטטוס משתני סביבה ואיתור המפתח ב‑KV כדי לאבחן
-      let kvOk = false
-      let kvHasKey = false
-      try {
-        const probe = await kvInstance.get(KEY)
-        kvOk = true
-        kvHasKey = !!probe && typeof probe === 'object' && Object.keys(probe).length > 0
-      } catch (_) {}
+    // Rate limiting
+    const ip = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown'
+    if (!checkRateLimit(ip, 100, 60000)) {
+      return new Response(JSON.stringify({ ok: false, error: 'Rate limit exceeded' }), { status: 429 })
+    }
 
+    const { searchParams } = new URL(request.url)
+    
+    // אם מבקשים נתונים ישנים, טען ישירות מה-KV
+    if (searchParams.get('legacy') === 'true') {
+      try {
+        await setupKV()
+        const raw = (await kvInstance.get(KEY)) || defaultData
+        const meta = await kvInstance.get(META_KEY).catch(()=>null)
+        const users = await kvInstance.get(USERS_KEY).catch(()=>null)
+        const matches = await kvInstance.get(MATCHES_KEY(1)).catch(()=>null)
+        const guesses = await kvInstance.get(GUESSES_KEY(1)).catch(()=>null)
+
+        const data = {
+          users: Array.isArray(users) ? users : (Array.isArray(raw.users) ? raw.users : []),
+          matches: Array.isArray(matches) ? matches : (Array.isArray(raw.matches) ? raw.matches : []),
+          userGuesses: Array.isArray(guesses) ? guesses : (Array.isArray(raw.userGuesses) ? raw.userGuesses : []),
+          adminPassword: meta?.adminPassword ?? raw.adminPassword,
+          entryFee: meta?.entryFee ?? raw.entryFee,
+          totoFirstPrize: meta?.totoFirstPrize ?? raw.totoFirstPrize,
+          submissionsLocked: meta?.submissionsLocked ?? raw.submissionsLocked,
+          countdownActive: meta?.countdownActive ?? raw.countdownActive,
+          countdownTarget: meta?.countdownTarget ?? raw.countdownTarget
+        }
+
+        return Response.json(data, { headers: { 'Cache-Control': 'no-store' } })
+      } catch (error) {
+        console.error('Error loading legacy data:', error)
+        return Response.json({ error: error.message }, { status: 500 })
+      }
+    }
+    
+    // טען נתונים מה-DataManager החדש
+    await dataManager.initialize()
+    if (searchParams.get('diag') === '1') {
+      // החזר סטטוס משתני סביבה
       return Response.json({
         ok: true,
         env: {
@@ -291,70 +342,52 @@ export async function GET(request) {
           UPSTASH_REDIS_REST_TOKEN: !!process.env.UPSTASH_REDIS_REST_TOKEN,
           ADMIN_TOKEN: !!process.env.ADMIN_TOKEN,
         },
-        kvOk,
-        kvHasKey,
-        key: KEY
+        dataManagerInitialized: true
       }, { headers: { 'Cache-Control': 'no-store' } })
     }
 
-    const raw = (await kvInstance.get(KEY)) || defaultData
     const fieldsParam = searchParams.get('fields') || searchParams.get('only')
     const wanted = fieldsParam ? new Set(fieldsParam.split(',').map(s => s.trim())) : null
 
-    let data = raw
-    // Shallow clone before mutating
-    if (wanted) {
-      data = { ...raw }
-    }
-
-    // Try split-keys first for faster/smaller payload
-    const [wkMatches, wkGuesses] = await Promise.all([
-      kvInstance.get(MATCHES_KEY(1)).catch(()=>null),
-      kvInstance.get(GUESSES_KEY(1)).catch(()=>null)
+    // טען את כל הנתונים מה-DataManager
+    const [users, matches, userGuesses, settings] = await Promise.all([
+      dataManager.getUsers(),
+      dataManager.getMatches(),
+      dataManager.getUserGuesses(),
+      dataManager.getSettings()
     ])
-    if (Array.isArray(wkMatches)) {
-      data.matches = wkMatches
-    } else if (Array.isArray(raw.matches)) {
-      data.matches = raw.matches
-    } else {
-      data.matches = []
+
+    let data = {
+      users,
+      matches,
+      userGuesses,
+      settings,
+      entryFee: settings?.entryFee || 35
     }
 
-    if (Array.isArray(wkGuesses)) {
-      data.userGuesses = wkGuesses
-    } else if (Array.isArray(raw.userGuesses)) {
-      data.userGuesses = raw.userGuesses
-    } else {
-      data.userGuesses = []
-    }
-
+    // Filter by requested fields
     if (wanted) {
       const filtered = {}
-      if (wanted.has('settings')) {
-        const meta = await kvInstance.get(META_KEY).catch(()=>null)
-        filtered.adminPassword = meta?.adminPassword ?? raw.adminPassword
-        filtered.entryFee = meta?.entryFee ?? raw.entryFee
-        filtered.totoFirstPrize = meta?.totoFirstPrize ?? raw.totoFirstPrize ?? 8000000
-        filtered.submissionsLocked = (meta?.submissionsLocked ?? raw.submissionsLocked) ?? false
-        filtered.countdownActive = (meta?.countdownActive ?? raw.countdownActive) ?? false
-        filtered.countdownTarget = meta?.countdownTarget ?? raw.countdownTarget ?? ''
+      for (const field of wanted) {
+        if (field in data) {
+          filtered[field] = data[field]
+        }
       }
-      if (wanted.has('matches')) filtered.matches = data.matches || []
-      if (wanted.has('guesses') || wanted.has('userGuesses')) filtered.userGuesses = data.userGuesses || []
-      if (wanted.has('users')) {
-        const users = await kvInstance.get(USERS_KEY).catch(()=>null)
-        filtered.users = Array.isArray(users) ? users : (raw.users || [])
-      }
-      if (wanted.has('pots')) filtered.pots = raw.pots || []
       data = filtered
     }
 
     return Response.json(data, {
       headers: { 'Cache-Control': 'no-store' }
     })
-  } catch (err) {
-    // אם אין KV מוגדר, נחזיר ברירת מחדל כדי שלא יישבר
-    return Response.json(defaultData, {
+  } catch (error) {
+    console.error('Error in data GET:', error)
+    return Response.json({ 
+      error: error.message,
+      users: [],
+      matches: [],
+      userGuesses: [],
+      settings: defaultData
+    }, {
       headers: { 'Cache-Control': 'no-store' }
     })
   }
@@ -362,6 +395,12 @@ export async function GET(request) {
 
 export async function PUT(req) {
   try {
+    // Rate limiting for write operations (more restrictive)
+    const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown'
+    if (!checkRateLimit(ip, 50, 60000)) {
+      return new Response(JSON.stringify({ ok: false, error: 'Rate limit exceeded' }), { status: 429 })
+    }
+
     await setupKV()
     const incoming = await req.json()
     const current = (await kvInstance.get(KEY)) || defaultData
@@ -372,8 +411,14 @@ export async function PUT(req) {
     // אבטחה: אם הוגדר טוקן בצד שרת — דרוש אותו בפעולות אדמין
     if (ADMIN_TOKEN && action === 'admin') {
       if (!token || token !== ADMIN_TOKEN) {
+        console.log(`Unauthorized admin access attempt from IP: ${ip}`)
         return new Response(JSON.stringify({ ok: false, error: 'Unauthorized' }), { status: 401 })
       }
+    }
+
+    // Logging for sensitive operations
+    if (action === 'admin' || action === 'cleanup' || action === 'clearAll') {
+      console.log(`Admin operation: ${action} from IP: ${ip}, token: ${token ? 'provided' : 'missing'}`)
     }
 
     // אכיפת נעילת הגשות: אם הנעילה פעילה כרגע, אל נאפשר שינוי userGuesses

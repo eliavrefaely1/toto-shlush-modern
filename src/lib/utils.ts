@@ -1,5 +1,6 @@
 import { Match, MatchesByDay, User, UserGuess, PaymentStatus } from '../types';
-import { VALIDATION_RULES, CONSTANTS } from './constants';
+import { VALIDATION_RULES } from './constants';
+import { CONSTANTS } from '../types';
 
 // ID Generation
 export const generateId = (): string => {
@@ -50,7 +51,7 @@ export const validatePhone = (phone: string): { isValid: boolean; error?: string
 export const validateGuess = (guess: string): { isValid: boolean; error?: string } => {
   if (guess === '') return { isValid: true }; // Empty guess is valid
   
-  if (!VALIDATION_RULES.GUESS.VALID_VALUES.includes(guess)) {
+  if (!VALIDATION_RULES.GUESS.VALID_VALUES.includes(guess as any)) {
     return { isValid: false, error: 'ניחוש לא תקין - השתמש ב-1, X או 2' };
   }
   return { isValid: true };
@@ -179,7 +180,7 @@ export const calculateScore = (guesses: string[], results: string[]): { score: n
   const correct: boolean[] = [];
   
   for (let i = 0; i < guesses.length; i++) {
-    const isCorrect = results[i] && guesses[i] === results[i];
+    const isCorrect = !!(results[i] && guesses[i] === results[i]);
     correct.push(isCorrect);
     if (isCorrect) {
       score++;
@@ -250,8 +251,69 @@ export const createError = (message: string, code?: string): Error => {
   return error;
 };
 
+// Security Utilities
+export const sanitizeInput = (input: string): string => {
+  if (!input) return '';
+  return input
+    .trim()
+    .replace(/[<>\"'&]/g, '') // Remove potentially dangerous characters
+    .slice(0, 1000); // Limit length
+};
+
 export const isNetworkError = (error: any): boolean => {
-  return error?.name === 'TypeError' && error?.message?.includes('fetch');
+  return error instanceof TypeError && error.message.includes('fetch');
+};
+
+// Rate Limiting (simple in-memory implementation)
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+
+export const checkRateLimit = (key: string, limit: number = 10, windowMs: number = 60000): boolean => {
+  const now = Date.now();
+  const current = rateLimitMap.get(key);
+  
+  if (!current || now > current.resetTime) {
+    rateLimitMap.set(key, { count: 1, resetTime: now + windowMs });
+    return true;
+  }
+  
+  if (current.count >= limit) {
+    return false;
+  }
+  
+  current.count++;
+  return true;
+};
+
+// Data Validation
+export const validateBackupData = (data: any): { isValid: boolean; error?: string } => {
+  try {
+    if (!data || typeof data !== 'object') {
+      return { isValid: false, error: 'Invalid data structure' };
+    }
+
+    // Check required fields
+    const requiredFields = ['users', 'matches', 'userGuesses', 'settings'];
+    for (const field of requiredFields) {
+      if (!(field in data)) {
+        return { isValid: false, error: `Missing required field: ${field}` };
+      }
+    }
+
+    // Validate arrays
+    if (!Array.isArray(data.users)) {
+      return { isValid: false, error: 'Users must be an array' };
+    }
+    if (!Array.isArray(data.matches)) {
+      return { isValid: false, error: 'Matches must be an array' };
+    }
+    if (!Array.isArray(data.userGuesses)) {
+      return { isValid: false, error: 'User guesses must be an array' };
+    }
+
+    return { isValid: true };
+  } catch (error) {
+    return { isValid: false, error: `Validation error: ${error}` };
+  }
 };
 
 // Local Storage Utilities

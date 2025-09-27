@@ -11,8 +11,8 @@ import { UI_CONSTANTS } from '../lib/constants';
 export const useHomeData = (): HomeData => {
   const router = useRouter();
   const [pot, setPot] = useState({ totalAmount: 0, numOfPlayers: 0, amountPerPlayer: 0 });
-  const [leaderboard, setLeaderboard] = useState([]);
-  const [matches, setMatches] = useState([]);
+  const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  const [matches, setMatches] = useState<any[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [countdown, setCountdown] = useState<Countdown>({
     active: false,
@@ -23,6 +23,7 @@ export const useHomeData = (): HomeData => {
     s: 0
   });
   const [settings, setSettings] = useState({
+    adminPassword: '1234',
     totoFirstPrize: 8000000,
     entryFee: 35,
     submissionsLocked: false,

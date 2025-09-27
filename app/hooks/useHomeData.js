@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import dataManager from '../lib/data.js';
+import { dataManager } from '../../src/lib/data-manager';
 
 export const useHomeData = () => {
   const router = useRouter();

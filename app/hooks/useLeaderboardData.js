@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import dataManager from '../lib/data.js';
+import { dataManager } from '../../src/lib/data-manager';
 
 export const useLeaderboardData = () => {
   const router = useRouter();
@@ -22,21 +22,27 @@ export const useLeaderboardData = () => {
   const loadData = async () => {
     // משוך דירוג מהיר מהשרת + נתוני משחקים וניחושים
     try {
-      const [lbRes, dataRes] = await Promise.all([
+      const [lbRes, dataRes, potRes] = await Promise.all([
         fetch(`/api/leaderboard`, { cache: 'no-store' }),
-        fetch(`/api/data?fields=matches,guesses,settings`, { cache: 'no-store' })
+        fetch(`/api/data?legacy=true`, { cache: 'no-store' }),
+        fetch(`/api/pot`, { cache: 'no-store' })
       ]);
       let lb = [];
       if (lbRes.ok) {
         const j = await lbRes.json();
         lb = Array.isArray(j.leaderboard) ? j.leaderboard : [];
       }
-      let matches = [], guesses = [], entryFee = (await dataManager.getSettings()).entryFee;
+      let matches = [], guesses = [], entryFee = 35;
       if (dataRes.ok) {
         const d = await dataRes.json();
         matches = Array.isArray(d.matches) ? d.matches : [];
         guesses = Array.isArray(d.userGuesses) ? d.userGuesses : [];
         if (typeof d.entryFee === 'number') entryFee = d.entryFee;
+      }
+      let pot = { totalAmount: 0, numOfPlayers: 0, amountPerPlayer: entryFee };
+      if (potRes.ok) {
+        const p = await potRes.json();
+        pot = p;
       }
 
       // העשרת הדירוג בניחושים לצורך תצוגה מורחבת
@@ -49,9 +55,9 @@ export const useLeaderboardData = () => {
 
       setLeaderboard(enriched);
       setMatchesForWeek(matches);
-      // חישוב קופה מקומי קל
-      setPot({ totalAmount: (guesses.length * entryFee), numOfPlayers: guesses.length, amountPerPlayer: entryFee });
+      setPot(pot);
     } catch (e) {
+      console.error('Error loading data:', e);
       // נפילה — fallback לנתונים מקומיים
       const currentLeaderboard = await dataManager.getLeaderboard(1);
       const currentPot = await dataManager.getPot(1);

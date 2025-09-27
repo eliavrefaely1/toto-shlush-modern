@@ -159,6 +159,7 @@ const createFullBackup = async (triggerAction = 'Manual backup') => {
 const restoreFromBackup = async (backupId) => {
   try {
     await setupKV()
+    
     // טעינת נתוני הגיבוי
     const backupData = await kvInstance.get(BACKUP_KEY(backupId))
     if (!backupData) {
@@ -168,7 +169,22 @@ const restoreFromBackup = async (backupId) => {
       }
     }
 
+    // בדיקת תקינות הגיבוי
+    const validationResult = validateBackupData(backupData)
+    if (!validationResult.isValid) {
+      return {
+        success: false,
+        error: `Invalid backup data: ${validationResult.error}`
+      }
+    }
+
     const { mainData, metaData, usersData, weekData } = backupData
+
+    // יצירת גיבוי לפני שחזור (בטיחות)
+    const safetyBackup = await createFullBackup(`Safety backup before restore from ${backupId}`)
+    if (!safetyBackup.success) {
+      console.warn('Failed to create safety backup before restore')
+    }
 
     // שחזור נתונים ראשיים
     if (mainData) {
@@ -198,6 +214,9 @@ const restoreFromBackup = async (backupId) => {
       }
     }
 
+    // יצירת גיבוי נוסף אחרי השחזור
+    await createFullBackup(`Post-restore backup from ${backupId}`)
+
     return {
       success: true,
       restored: {
@@ -213,6 +232,43 @@ const restoreFromBackup = async (backupId) => {
       success: false,
       error: error.message
     }
+  }
+}
+
+// בדיקת תקינות נתוני גיבוי
+const validateBackupData = (backupData) => {
+  try {
+    // בדיקת מבנה בסיסי
+    if (!backupData || typeof backupData !== 'object') {
+      return { isValid: false, error: 'Invalid backup structure' }
+    }
+
+    // בדיקת תאריך יצירה
+    if (!backupData.timestamp || !backupData.created) {
+      return { isValid: false, error: 'Missing timestamp information' }
+    }
+
+    // בדיקת גרסה
+    if (!backupData.version) {
+      return { isValid: false, error: 'Missing version information' }
+    }
+
+    // בדיקת נתונים ראשיים
+    if (backupData.mainData) {
+      if (!Array.isArray(backupData.mainData.users)) {
+        return { isValid: false, error: 'Invalid users data structure' }
+      }
+      if (!Array.isArray(backupData.mainData.matches)) {
+        return { isValid: false, error: 'Invalid matches data structure' }
+      }
+      if (!Array.isArray(backupData.mainData.userGuesses)) {
+        return { isValid: false, error: 'Invalid guesses data structure' }
+      }
+    }
+
+    return { isValid: true }
+  } catch (error) {
+    return { isValid: false, error: `Validation error: ${error.message}` }
   }
 }
 

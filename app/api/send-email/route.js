@@ -101,7 +101,13 @@ export async function POST(request) {
     // יצירת תוכן המייל
     const timestamp = new Date(backupData.timestamp || new Date().toISOString()).toLocaleString('he-IL')
     const triggerAction = backupData.triggerAction || 'פעולה לא ידועה'
-    const subject = `גיבוי נתונים - טוטו שלוש - ${timestamp}`
+    
+    // חישוב מספר משתתפים בהימור השבועי
+    const weeklyParticipants = backupData.mainData?.userGuesses?.length || 0
+    const paidParticipants = backupData.mainData?.userGuesses?.filter(g => g.paymentStatus === 'paid').length || 0
+    const totalUsers = backupData.mainData?.users?.length || 0
+    
+    const subject = `גיבוי נתונים - טוטו שלוש - ${triggerAction} - ${timestamp}`
     
     const htmlContent = `
       <!DOCTYPE html>
@@ -141,16 +147,16 @@ export async function POST(request) {
 
             <div class="stats">
               <div class="stat">
-                <div class="stat-number">${backupData.files?.mainData ? '✓' : '✗'}</div>
-                <div class="stat-label">נתונים ראשיים</div>
+                <div class="stat-number">${weeklyParticipants}</div>
+                <div class="stat-label">משתתפים בהימור השבועי</div>
               </div>
               <div class="stat">
-                <div class="stat-number">${backupData.files?.usersData ? '✓' : '✗'}</div>
-                <div class="stat-label">נתוני משתמשים</div>
+                <div class="stat-number">${paidParticipants}</div>
+                <div class="stat-label">משתתפים ששילמו</div>
               </div>
               <div class="stat">
-                <div class="stat-number">${backupData.files?.weeks || 0}</div>
-                <div class="stat-label">שבועות</div>
+                <div class="stat-number">${totalUsers}</div>
+                <div class="stat-label">סה"כ משתמשים רשומים</div>
               </div>
             </div>
 
@@ -188,6 +194,11 @@ ${timestamp}
 - מזהה: ${backupData.backupId || 'N/A'}
 - גרסה: ${backupData.version || '2.0'}
 - פעולה שגרמה לגיבוי: ${triggerAction}
+
+סטטיסטיקות השבוע:
+- משתתפים בהימור השבועי: ${weeklyParticipants}
+- משתתפים ששילמו: ${paidParticipants}
+- סה"כ משתמשים רשומים: ${totalUsers}
 
 תוכן הגיבוי:
 - נתונים ראשיים: ${backupData.mainData ? 'נשמר' : 'לא זמין'}

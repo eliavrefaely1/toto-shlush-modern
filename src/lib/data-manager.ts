@@ -6,9 +6,9 @@ import {
   Pot, 
   LeaderboardEntry, 
   PaymentStatus,
-  DEFAULT_VALUES,
   CONSTANTS
 } from '../types';
+import { DEFAULT_VALUES } from './constants';
 import { apiClient } from './api-client';
 import { 
   generateId, 
@@ -24,6 +24,7 @@ import { ERROR_MESSAGES, SUCCESS_MESSAGES } from './constants';
 class DataManager {
   private isInitialized = false;
   private lastBackupTime: number | null = null;
+  private cache = new Map<string, { data: any; timestamp: number; ttl: number }>();
   private data: {
     users: User[];
     matches: Match[];
@@ -31,15 +32,53 @@ class DataManager {
     settings: Settings;
   } | null = null;
 
+  // Cache Management
+  private setCache(key: string, data: any, ttl: number = 30000): void {
+    this.cache.set(key, {
+      data,
+      timestamp: Date.now(),
+      ttl
+    });
+  }
+
+  private getCache(key: string): any | null {
+    const cached = this.cache.get(key);
+    if (!cached) return null;
+    
+    const isExpired = Date.now() - cached.timestamp > cached.ttl;
+    if (isExpired) {
+      this.cache.delete(key);
+      return null;
+    }
+    
+    return cached.data;
+  }
+
+  private clearCache(): void {
+    this.cache.clear();
+  }
+
   // Initialization
   async initialize(): Promise<void> {
     if (this.isInitialized) return;
     
     try {
+      // נסה לטעון נתונים מה-KV הישן קודם
+      const legacyData = await this.loadLegacyData();
+      if (legacyData) {
+        this.data = legacyData;
+        this.normalizeData();
+        this.setCache('initialized', true, 300000); // 5 minutes
+        this.isInitialized = true;
+        return;
+      }
+
+      // אם אין נתונים ישנים, נסה את ה-API החדש
       const response = await apiClient.getData();
       if (response.ok && response.data) {
         this.data = response.data;
         this.normalizeData();
+        this.setCache('initialized', true, 300000); // 5 minutes
       } else {
         this.data = this.getDefaultData();
       }
@@ -58,6 +97,96 @@ class DataManager {
       userGuesses: [],
       settings: { ...DEFAULT_VALUES.SETTINGS }
     };
+  }
+
+  // טעינת נתונים מה-KV הישן דרך API
+  private async loadLegacyData(): Promise<any | null> {
+    try {
+      // בדוק אם אנחנו בצד השרת או הקליינט
+      if (typeof window !== 'undefined') {
+        // בצד הקליינט, נסה לטעון דרך API עם fallback ל-KV הישן
+        try {
+          // נסה לטעון דרך API עם KV הישן
+          const response = await fetch('/api/data?legacy=true', {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          
+          if (response.ok) {
+            const legacyData = await response.json();
+            if (legacyData.users && legacyData.users.length > 0) {
+              return {
+                users: legacyData.users,
+                matches: legacyData.matches || [],
+                userGuesses: legacyData.userGuesses || [],
+                settings: {
+                  adminPassword: legacyData.adminPassword || DEFAULT_VALUES.SETTINGS.adminPassword,
+                  entryFee: legacyData.entryFee || DEFAULT_VALUES.SETTINGS.entryFee,
+                  totoFirstPrize: legacyData.totoFirstPrize || DEFAULT_VALUES.SETTINGS.totoFirstPrize,
+                  submissionsLocked: legacyData.submissionsLocked || false,
+                  countdownActive: legacyData.countdownActive || false,
+                  countdownTarget: legacyData.countdownTarget || '',
+                  currentWeek: 1
+                }
+              };
+            }
+          }
+        } catch (apiError) {
+          console.log('API fallback failed, trying direct KV access');
+        }
+        
+        // אם API לא עבד, נחזור null ונשתמש בנתונים ברירת מחדל
+        return null;
+      }
+
+      // בצד השרת, נסה לטעון ישירות מה-KV
+      const { kv } = await import('@vercel/kv');
+      
+      // מפתחות KV הישנים
+      const KEY = 'toto:data:v1';
+      const META_KEY = 'toto:meta:v1';
+      const USERS_KEY = 'toto:users:v1';
+      const MATCHES_KEY = (w) => `toto:week:${w}:matches:v1`;
+      const GUESSES_KEY = (w) => `toto:week:${w}:guesses:v1`;
+
+      // טען נתונים
+      const [mainData, metaData, usersData, matchesData, guessesData] = await Promise.all([
+        kv.get(KEY).catch(() => null),
+        kv.get(META_KEY).catch(() => null),
+        kv.get(USERS_KEY).catch(() => null),
+        kv.get(MATCHES_KEY(1)).catch(() => null),
+        kv.get(GUESSES_KEY(1)).catch(() => null)
+      ]);
+
+      // בדוק אם יש נתונים
+      const hasUsers = Array.isArray(usersData) ? usersData.length > 0 : (Array.isArray(mainData?.users) ? mainData.users.length > 0 : false);
+      if (!hasUsers) return null;
+
+      // המר לפורמט החדש
+      const users = Array.isArray(usersData) ? usersData : (Array.isArray(mainData?.users) ? mainData.users : []);
+      const matches = Array.isArray(matchesData) ? matchesData : (Array.isArray(mainData?.matches) ? mainData.matches : []);
+      const userGuesses = Array.isArray(guessesData) ? guessesData : (Array.isArray(mainData?.userGuesses) ? mainData.userGuesses : []);
+      
+      const settings = metaData || mainData || {};
+      
+      return {
+        users,
+        matches,
+        userGuesses,
+        settings: {
+          adminPassword: settings.adminPassword || DEFAULT_VALUES.SETTINGS.adminPassword,
+          entryFee: settings.entryFee || DEFAULT_VALUES.SETTINGS.entryFee,
+          totoFirstPrize: settings.totoFirstPrize || DEFAULT_VALUES.SETTINGS.totoFirstPrize,
+          submissionsLocked: settings.submissionsLocked || false,
+          countdownActive: settings.countdownActive || false,
+          countdownTarget: settings.countdownTarget || '',
+          currentWeek: 1
+        }
+      };
+    } catch (error) {
+      console.error('Failed to load legacy data:', error);
+      return null;
+    }
   }
 
   private normalizeData(): void {
@@ -81,7 +210,7 @@ class DataManager {
         })
         .map(user => ({
           ...user,
-          paymentStatus: user.paymentStatus || DEFAULT_VALUES.USER.paymentStatus,
+          paymentStatus: user.paymentStatus || PaymentStatus.UNPAID,
           createdAt: user.createdAt || new Date().toISOString(),
           updatedAt: user.updatedAt || new Date().toISOString()
         }));
@@ -134,7 +263,7 @@ class DataManager {
         })
         .map(guess => ({
           ...guess,
-          paymentStatus: guess.paymentStatus || DEFAULT_VALUES.GUESS.paymentStatus,
+          paymentStatus: guess.paymentStatus || PaymentStatus.UNPAID,
           week: guess.week || DEFAULT_VALUES.GUESS.week,
           createdAt: guess.createdAt || new Date().toISOString(),
           updatedAt: guess.updatedAt || new Date().toISOString()
@@ -143,6 +272,12 @@ class DataManager {
       if (this.data.userGuesses.length !== originalLength) {
         changed = true;
       }
+    }
+
+    // Normalize settings
+    if (!this.data.settings || typeof this.data.settings !== 'object') {
+      this.data.settings = { ...DEFAULT_VALUES.SETTINGS };
+      changed = true;
     }
 
     if (changed) {
@@ -155,6 +290,9 @@ class DataManager {
     
     try {
       const response = await apiClient.updateData(this.data);
+      if (response.ok) {
+        this.clearCache(); // Clear cache after successful save
+      }
       return response.ok;
     } catch (error) {
       console.error('Failed to save data:', error);
@@ -181,7 +319,14 @@ class DataManager {
   // User Management
   async getUsers(): Promise<User[]> {
     await this.initialize();
-    return this.data?.users || [];
+    
+    // Check cache first
+    const cached = this.getCache('users');
+    if (cached) return cached;
+    
+    const users = this.data?.users || [];
+    this.setCache('users', users, 60000); // Cache for 1 minute
+    return users;
   }
 
   async addUser(userData: { name: string; phone?: string; isAdmin?: boolean }): Promise<User> {
@@ -214,7 +359,7 @@ class DataManager {
       name: userData.name.trim(),
       phone: userData.phone?.trim(),
       isAdmin: userData.isAdmin || false,
-      paymentStatus: DEFAULT_VALUES.USER.paymentStatus,
+      paymentStatus: PaymentStatus.UNPAID,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -265,7 +410,14 @@ class DataManager {
   // Match Management
   async getMatches(): Promise<Match[]> {
     await this.initialize();
-    return this.data?.matches || [];
+    
+    // Check cache first
+    const cached = this.getCache('matches');
+    if (cached) return cached;
+    
+    const matches = this.data?.matches || [];
+    this.setCache('matches', matches, 60000); // Cache for 1 minute
+    return matches;
   }
 
   async addMatch(matchData: {
@@ -331,7 +483,14 @@ class DataManager {
   // Guess Management
   async getUserGuesses(): Promise<UserGuess[]> {
     await this.initialize();
-    return this.data?.userGuesses || [];
+    
+    // Check cache first
+    const cached = this.getCache('userGuesses');
+    if (cached) return cached;
+    
+    const guesses = this.data?.userGuesses || [];
+    this.setCache('userGuesses', guesses, 60000); // Cache for 1 minute
+    return guesses;
   }
 
   async addUserGuess(guessData: {
@@ -361,7 +520,7 @@ class DataManager {
       guesses: [...guessData.guesses],
       score: 0,
       correct: Array(CONSTANTS.MAX_GUESSES).fill(false),
-      paymentStatus: DEFAULT_VALUES.GUESS.paymentStatus,
+      paymentStatus: PaymentStatus.UNPAID,
       week: guessData.week || DEFAULT_VALUES.GUESS.week,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -412,13 +571,23 @@ class DataManager {
 
     const matches = this.data.matches;
     const results = matches.map(m => m.result || '');
+    let hasChanges = false;
 
+    // Update all guesses in memory first
     for (const guess of this.data.userGuesses) {
       const { score, correct } = calculateScore(guess.guesses, results);
       
       if (guess.score !== score || JSON.stringify(guess.correct) !== JSON.stringify(correct)) {
-        await this.updateUserGuess(guess.id, { score, correct });
+        guess.score = score;
+        guess.correct = correct;
+        guess.updatedAt = new Date().toISOString();
+        hasChanges = true;
       }
+    }
+
+    // Save only once if there were changes
+    if (hasChanges) {
+      await this.saveData();
     }
 
     return this.data.userGuesses;
@@ -463,7 +632,7 @@ class DataManager {
     if (!this.data) return { numOfPlayers: 0, amountPerPlayer: 0, totalAmount: 0 };
 
     const numOfPlayers = this.data.userGuesses.length;
-    const amountPerPlayer = this.data.settings.entryFee;
+    const amountPerPlayer = this.data.settings?.entryFee || CONSTANTS.DEFAULT_ENTRY_FEE;
     const totalAmount = numOfPlayers * amountPerPlayer;
 
     return { numOfPlayers, amountPerPlayer, totalAmount };
@@ -472,7 +641,14 @@ class DataManager {
   // Settings
   async getSettings(): Promise<Settings> {
     await this.initialize();
-    return this.data?.settings || { ...DEFAULT_VALUES.SETTINGS };
+    
+    // Check cache first
+    const cached = this.getCache('settings');
+    if (cached) return cached;
+    
+    const settings = this.data?.settings || { ...DEFAULT_VALUES.SETTINGS };
+    this.setCache('settings', settings, 300000); // Cache for 5 minutes
+    return settings;
   }
 
   async updateSettings(settings: Partial<Settings>): Promise<boolean> {
@@ -481,9 +657,23 @@ class DataManager {
 
     this.data.settings = {
       ...this.data.settings,
-      ...settings,
-      updatedAt: new Date().toISOString()
+      ...settings
     };
+
+    await this.saveData();
+    return true;
+  }
+
+  // Update Payment Status
+  async updateGuessPaymentStatus(guessId: string, paymentStatus: PaymentStatus): Promise<boolean> {
+    await this.initialize();
+    if (!this.data) return false;
+
+    const guessIndex = this.data.userGuesses.findIndex(guess => guess.id === guessId);
+    if (guessIndex === -1) return false;
+
+    this.data.userGuesses[guessIndex].paymentStatus = paymentStatus;
+    this.data.userGuesses[guessIndex].updatedAt = new Date().toISOString();
 
     await this.saveData();
     return true;

@@ -29,10 +29,7 @@ export { default as BackupList } from './BackupList';
 export { default as BackupInstructions } from './BackupInstructions';
 export { default as BackupNavigation } from './BackupNavigation';
 
-// Instructions Components
-export { default as InstructionsHeader } from './InstructionsHeader';
-export { default as InstructionsSection } from './InstructionsSection';
-export { default as InstructionsActions } from './InstructionsActions';
+// Instructions Components - Now integrated into page.tsx
 
 // Admin Components
 export { default as AdminHeader } from './admin/AdminHeader';

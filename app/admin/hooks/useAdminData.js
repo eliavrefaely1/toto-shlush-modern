@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import dataManager from '../../lib/data.js';
+import { dataManager } from '../../../src/lib/data-manager';
 
 export const useAdminData = () => {
   const [isLoading, setIsLoading] = useState(false);
