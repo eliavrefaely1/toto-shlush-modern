@@ -756,6 +756,7 @@ class DataManager {
           phone: user?.phone || guess.phone,
           score: guess.score,
           paymentStatus: guess.paymentStatus,
+          guesses: guess.guesses, // הוסף את הניחושים
           user: user || { 
             id: guess.userId, 
             name: guess.name, 
