@@ -273,7 +273,8 @@ export default function AdminPage() {
       console.log('Participants loaded:', currentParticipants);
       const currentGuesses = data.userGuesses;
       console.log('Guesses loaded:', currentGuesses);
-      const currentLeaderboard = await leaderboardResponse.json();
+      const leaderboardData = await leaderboardResponse.json();
+      const currentLeaderboard = leaderboardData.leaderboard || leaderboardData;
       console.log('Leaderboard loaded:', currentLeaderboard);
       const currentPot = await potResponse.json();
       console.log('Pot loaded:', currentPot);
