@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { dataManager } from '../../src/lib/data-manager';
 
 export const useLeaderboardData = () => {
   const router = useRouter();
@@ -49,18 +48,23 @@ export const useLeaderboardData = () => {
   }, []);
 
   const loadData = async () => {
-    // השתמש ישירות ב-dataManager החדש במקום API routes
+    // השתמש ב-API routes כדי לקבל נתונים עדכניים מהשרת
     console.log('🔄 Loading leaderboard data...');
     try {
-      // אתחל את ה-dataManager
-      await dataManager.initialize();
-      
-      // טען את כל הנתונים ישירות
-      const [lb, matches, pot] = await Promise.all([
-        dataManager.getLeaderboard(),
-        dataManager.getMatches(),
-        dataManager.getPot()
+      // טען את כל הנתונים דרך API routes
+      const [leaderboardResponse, matchesResponse, potResponse] = await Promise.all([
+        fetch('/api/leaderboard'),
+        fetch('/api/data?legacy=true'),
+        fetch('/api/pot')
       ]);
+
+      const leaderboardData = await leaderboardResponse.json();
+      const dataResponse = await matchesResponse.json();
+      const potData = await potResponse.json();
+
+      const lb = leaderboardData.leaderboard || leaderboardData;
+      const matches = dataResponse.matches || [];
+      const pot = potData;
 
       console.log(`✅ Loaded ${lb.length} leaderboard entries`);
       setLeaderboard(lb);
@@ -77,7 +81,6 @@ export const useLeaderboardData = () => {
   const refreshNow = async () => {
     setIsRefreshing(true);
     try {
-      await dataManager.initialize();
       loadData();
     } finally {
       // ריענון מלא כמו F5

@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { dataManager } from '../../src/lib/data-manager';
 
 export const useHomeData = () => {
   const router = useRouter();
@@ -96,15 +95,21 @@ export const useHomeData = () => {
   const refreshData = async () => {
     setIsRefreshing(true);
     try {
-      await dataManager.initialize();
-      
-      // השתמש ישירות ב-dataManager במקום API routes
-      const [currentMatches, currentSettings, currentPot, currentLeaderboard] = await Promise.all([
-        dataManager.getMatches(),
-        dataManager.getSettings(),
-        dataManager.getPot(),
-        dataManager.getLeaderboard()
+      // השתמש ב-API routes כדי לקבל נתונים עדכניים מהשרת
+      const [dataResponse, leaderboardResponse, potResponse] = await Promise.all([
+        fetch('/api/data?legacy=true'),
+        fetch('/api/leaderboard'),
+        fetch('/api/pot')
       ]);
+
+      const data = await dataResponse.json();
+      const leaderboardData = await leaderboardResponse.json();
+      const potData = await potResponse.json();
+
+      const currentMatches = data.matches || [];
+      const currentSettings = data.settings || {};
+      const currentPot = potData;
+      const currentLeaderboard = leaderboardData.leaderboard || leaderboardData;
       
       setMatches(currentMatches);
       setSettings(currentSettings);
@@ -123,35 +128,40 @@ export const useHomeData = () => {
   // טעינת נתונים ראשונית
   useEffect(() => {
     const init = async () => {
-      await dataManager.initialize();
-      // משוך קופה מהשרת (קל משקל)
-      let currentPot = await dataManager.getPot();
       try {
-        const s = await dataManager.getSettings();
-        const resPot = await fetch(`/api/pot`, { cache: 'no-store' });
-        if (resPot.ok) currentPot = await resPot.json();
-      } catch (_) {}
-      // משוך דירוג מהיר מהשרת (קל משקל)
-      try {
-        const res = await fetch(`/api/leaderboard`, { cache: 'no-store' });
-        if (res.ok) {
-          const j = await res.json();
-          setLeaderboard(Array.isArray(j.leaderboard) ? j.leaderboard : []);
+        // השתמש ב-API routes כדי לקבל נתונים עדכניים מהשרת
+        const [dataResponse, leaderboardResponse, potResponse] = await Promise.all([
+          fetch('/api/data?legacy=true', { cache: 'no-store' }),
+          fetch('/api/leaderboard', { cache: 'no-store' }),
+          fetch('/api/pot', { cache: 'no-store' })
+        ]);
+
+        const data = await dataResponse.json();
+        const leaderboardData = await leaderboardResponse.json();
+        const potData = await potResponse.json();
+
+        const currentMatches = data.matches || [];
+        const currentSettings = data.settings || {};
+        const currentPot = potData;
+        const currentLeaderboard = leaderboardData.leaderboard || leaderboardData;
+
+        setMatches(currentMatches);
+        setSettings(currentSettings);
+        setPot(currentPot);
+        setLeaderboard(currentLeaderboard);
+
+        if (currentSettings.countdownActive && currentSettings.countdownTarget) {
+          setCountdown({active:true, target:currentSettings.countdownTarget, d:0,h:0,m:0,s:0});
         } else {
-          setLeaderboard(await dataManager.getLeaderboard());
+          setCountdown({active:false, target:'', d:0,h:0,m:0,s:0});
         }
-      } catch (_) {
-        setLeaderboard(await dataManager.getLeaderboard());
-      }
-      // טען משחקים
-      const currentMatches = await dataManager.getMatches();
-      setMatches(currentMatches);
-      setPot(currentPot);
-      const s = await dataManager.getSettings();
-      setSettings(s);
-      if (s.countdownActive && s.countdownTarget) {
-        setCountdown({active:true, target:s.countdownTarget, d:0,h:0,m:0,s:0});
-      } else {
+      } catch (error) {
+        console.error('Error loading home data:', error);
+        // הגדרות ברירת מחדל
+        setMatches([]);
+        setSettings({ totoFirstPrize: 8000000 });
+        setPot({ totalAmount: 0, numOfPlayers: 0 });
+        setLeaderboard([]);
         setCountdown({active:false, target:'', d:0,h:0,m:0,s:0});
       }
     };
@@ -189,7 +199,17 @@ export const useHomeData = () => {
       if (diff <= 0) {
         setCountdown((c)=>({...c,d:0,h:0,m:0,s:0, active:false}));
         // נעל הגשה אוטומטית וכבה שעון
-        await dataManager.updateSettings({ submissionsLocked: true, countdownActive: false });
+        try {
+          await fetch('/api/update-settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+              settings: { submissionsLocked: true, countdownActive: false } 
+            }),
+          });
+        } catch (error) {
+          console.error('Error updating settings:', error);
+        }
         return;
       }
       const d = Math.floor(diff / (1000*60*60*24));
