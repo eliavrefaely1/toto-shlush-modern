@@ -66,7 +66,6 @@ export default function AdminPage() {
   useEffect(() => {
     if (isAuthenticated) {
       (async () => {
-        await dataManager.initialize();
         loadAdminData();
       })();
     }
@@ -97,7 +96,6 @@ export default function AdminPage() {
   const refreshAll = async () => {
     setIsRefreshing(true);
     try {
-      await dataManager.initialize();
       loadAdminData();
     } finally {
       // ריענון מלא כמו F5
@@ -114,7 +112,6 @@ export default function AdminPage() {
     try {
       // אין יותר localStorage - רק רענון מהשרת
       showToast('מרענן נתונים מהשרת');
-      await dataManager.initialize();
       loadAdminData();
     } finally {
       if (typeof window !== 'undefined') window.location.reload();
@@ -216,31 +213,42 @@ export default function AdminPage() {
 
   const deleteMatch = async (matchId) => {
     if (confirm('האם אתה בטוח שברצונך למחוק את המשחק?')) {
-      await dataManager.deleteMatch(matchId);
-      await dataManager.initialize();
-      const response = await fetch('/api/data?legacy=true');
-      const data = await response.json();
-      const updatedMatches = data.matches;
-      setMatches(updatedMatches);
-      showToast('משחק נמחק');
+      try {
+        const response = await fetch('/api/delete-match', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ matchId }),
+        });
+        if (response.ok) {
+          await loadAdminData();
+          showToast('משחק נמחק');
+        } else {
+          showToast('שגיאה במחיקת המשחק', 'error');
+        }
+      } catch (error) {
+        console.error('Error deleting match:', error);
+        showToast('שגיאה במחיקת המשחק', 'error');
+      }
     }
   };
 
   const clearAllMatches = async () => {
     if (confirm('האם אתה בטוח שברצונך למחוק את כל המשחקים?')) {
-      // Clear all matches
-      await dataManager.clearAllMatches();
-      
-      // Update UI state
-      const response = await fetch('/api/data?legacy=true');
-      const data = await response.json();
-      const updated = data.matches;
-      setMatches(updated);
-      
-      // Also refresh all admin data to ensure everything is in sync
-      loadAdminData();
-      
-      showToast('כל המשחקים נמחקו בהצלחה!');
+      try {
+        const response = await fetch('/api/clear-matches', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        if (response.ok) {
+          await loadAdminData();
+          showToast('כל המשחקים נמחקו בהצלחה!');
+        } else {
+          showToast('שגיאה במחיקת המשחקים', 'error');
+        }
+      } catch (error) {
+        console.error('Error clearing matches:', error);
+        showToast('שגיאה במחיקת המשחקים', 'error');
+      }
     }
   };
 
@@ -344,7 +352,13 @@ export default function AdminPage() {
       const parsedData = JSON.parse(jsonData);
       
       // מחיקת משחקים קיימים
-      await dataManager.clearAllMatches();
+      const clearResponse = await fetch('/api/clear-matches', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!clearResponse.ok) {
+        throw new Error('Failed to clear existing matches');
+      }
       
       // יצירת משחקים חדשים
       const newMatches = [];
@@ -362,8 +376,15 @@ export default function AdminPage() {
             date: row.eventStartTime ? String(row.eventStartTime).slice(0,10) : (row.date ? String(row.date).slice(0,10) : ''),
             category: 'טוטו 16'
           };
-          const addedMatch = await dataManager.addMatch(match);
-          newMatches.push(addedMatch);
+          const addResponse = await fetch('/api/add-match', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(match),
+          });
+          if (addResponse.ok) {
+            const data = await addResponse.json();
+            newMatches.push(data.match);
+          }
         }
       } else if (Array.isArray(parsedData)) {
         // אם הנתונים הם מערך ישיר
@@ -380,8 +401,15 @@ export default function AdminPage() {
             date: row.eventStartTime ? String(row.eventStartTime).slice(0,10) : (row.date ? String(row.date).slice(0,10) : ''),
             category: 'טוטו 16'
           };
-          const addedMatch = await dataManager.addMatch(match);
-          newMatches.push(addedMatch);
+          const addResponse = await fetch('/api/add-match', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(match),
+          });
+          if (addResponse.ok) {
+            const data = await addResponse.json();
+            newMatches.push(data.match);
+          }
         }
       }
       
@@ -412,15 +440,25 @@ export default function AdminPage() {
   };
 
   const updateMatch = async (matchId, field, value) => {
-    const updatedMatch = await dataManager.updateMatch(matchId, { [field]: value });
-    if (updatedMatch) {
-      setMatches((prev) => prev.map((m) => (m.id === matchId ? updatedMatch : m)));
-      if (field === 'result') {
-        await dataManager.calculateScores();
-        const response = await fetch('/api/leaderboard');
+    try {
+      const response = await fetch('/api/update-match', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ matchId, field, value }),
+      });
+      if (response.ok) {
         const data = await response.json();
-        setLeaderboard(data);
+        const updatedMatch = data.updatedMatch;
+        setMatches((prev) => prev.map((m) => (m.id === matchId ? updatedMatch : m)));
+        if (field === 'result') {
+          await loadAdminData();
+        }
+      } else {
+        showToast('שגיאה בעדכון המשחק', 'error');
       }
+    } catch (error) {
+      console.error('Error updating match:', error);
+      showToast('שגיאה בעדכון המשחק', 'error');
     }
   };
 
@@ -533,29 +571,63 @@ export default function AdminPage() {
 
   const deleteGuessesForUserCurrentWeek = async (userIdOrName) => {
     if (confirm('למחוק את הניחוש של המשתתף?')) {
-      await dataManager.deleteUserGuessesByUser(userIdOrName);
-      // רענון מלא של נתוני האדמין כדי לשקף את המחיקה מיד
-      await dataManager.calculateScores();
-      await loadAdminData();
-      showToast('ניחוש המשתתף נמחק');
+      try {
+        const response = await fetch('/api/delete-user-guesses', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userIdOrName }),
+        });
+        if (response.ok) {
+          await loadAdminData();
+          showToast('ניחוש המשתתף נמחק');
+        } else {
+          showToast('שגיאה במחיקת הניחוש', 'error');
+        }
+      } catch (error) {
+        console.error('Error deleting user guesses:', error);
+        showToast('שגיאה במחיקת הניחוש', 'error');
+      }
     }
   };
 
   const clearAllGuessesForCurrentWeek = async () => {
     if (confirm('האם אתה בטוח שברצונך למחוק את כל הניחושים?')) {
-      await dataManager.clearAllGuesses();
-      await dataManager.calculateScores();
-      await loadAdminData();
-      showToast('כל הניחושים נמחקו');
+      try {
+        const response = await fetch('/api/clear-guesses', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        if (response.ok) {
+          await loadAdminData();
+          showToast('כל הניחושים נמחקו');
+        } else {
+          showToast('שגיאה במחיקת הניחושים', 'error');
+        }
+      } catch (error) {
+        console.error('Error clearing guesses:', error);
+        showToast('שגיאה במחיקת הניחושים', 'error');
+      }
     }
   };
 
   const deleteGuessById = async (guessId) => {
     if (confirm('למחוק את הניחוש?')) {
-      await dataManager.deleteUserGuess(guessId);
-      await dataManager.calculateScores();
-      await loadAdminData();
-      showToast('הניחוש נמחק');
+      try {
+        const response = await fetch('/api/delete-guess', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ guessId }),
+        });
+        if (response.ok) {
+          await loadAdminData();
+          showToast('הניחוש נמחק');
+        } else {
+          showToast('שגיאה במחיקת הניחוש', 'error');
+        }
+      } catch (error) {
+        console.error('Error deleting guess:', error);
+        showToast('שגיאה במחיקת הניחוש', 'error');
+      }
     }
   };
 
@@ -585,7 +657,6 @@ export default function AdminPage() {
         console.log(`✅ Client: Delete result:`, result);
         
         // רענן את הנתונים
-        await dataManager.calculateScores();
         await loadAdminData();
         
         showToast(`נמחקו ${result.usersRemoved} משתמש/ים ו-${result.guessesRemoved} ניחושים.`);
@@ -597,31 +668,54 @@ export default function AdminPage() {
   };
 
   const updatePaymentStatus = async (guessId, paymentStatus) => {
-    const updatedGuess = await dataManager.updateGuessPaymentStatus(guessId, paymentStatus);
-    if (updatedGuess) {
-      // עדכן את ה-state ישירות במקום לטעון מחדש
-      setLeaderboard(prev => prev.map(entry => 
-        entry.id === guessId ? { ...entry, paymentStatus: paymentStatus } : entry
-      ));
+    try {
+      const response = await fetch('/api/update-payment-status', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ guessId, paymentStatus }),
+      });
+      if (response.ok) {
+        // עדכן את ה-state ישירות במקום לטעון מחדש
+        setLeaderboard(prev => prev.map(entry => 
+          entry.id === guessId ? { ...entry, paymentStatus: paymentStatus } : entry
+        ));
+        showToast(`סטטוס התשלום עודכן ל-${paymentStatus === 'paid' ? 'שולם' : 'לא שולם'}`);
+      } else {
+        showToast('שגיאה בעדכון סטטוס התשלום', 'error');
+      }
+    } catch (error) {
+      console.error('Error updating payment status:', error);
+      showToast('שגיאה בעדכון סטטוס התשלום', 'error');
     }
-    showToast(`סטטוס התשלום עודכן ל-${paymentStatus === 'paid' ? 'שולם' : 'לא שולם'}`);
   };
 
   const handleRenameUser = async () => {
     if (!renameUser || !newUserName.trim()) return;
     
     try {
-      const updatedUser = await dataManager.renameUser(renameUser.name, newUserName.trim());
-      if (updatedUser) {
+      const response = await fetch('/api/rename-user', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          oldName: renameUser.name, 
+          newName: newUserName.trim() 
+        }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        const updatedUser = data.updatedUser;
         // עדכן את ה-state
         setParticipants(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
         showToast(`השם שונה מ-"${renameUser.name}" ל-"${newUserName.trim()}"`);
         setShowRenameModal(false);
         setRenameUser(null);
         setNewUserName('');
+      } else {
+        showToast('שגיאה בשינוי השם', 'error');
       }
     } catch (error) {
-      showToast(error.message, 'error');
+      console.error('Error renaming user:', error);
+      showToast('שגיאה בשינוי השם', 'error');
     }
   };
 
@@ -676,19 +770,21 @@ export default function AdminPage() {
     
     try {
       // עדכון הניחוש
-      const updatedGuess = await dataManager.updateUserGuess(editGuessData.id, {
-        guesses: tempGuesses,
-        updatedAt: new Date().toISOString()
+      const response = await fetch('/api/update-guess', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          guessId: editGuessData.id,
+          guesses: tempGuesses,
+          updatedAt: new Date().toISOString()
+        }),
       });
       
-      if (!updatedGuess) {
+      if (!response.ok) {
         showToast('לא נמצא הניחוש לעדכון - ייתכן שנמחק', 'error');
         setShowEditGuessModal(false);
         return;
       }
-      
-      // חישוב מחדש של הניקוד
-      await dataManager.calculateScores();
       
       // רענון נתוני האדמין
       await loadAdminData();
@@ -732,9 +828,22 @@ export default function AdminPage() {
   };
 
   const createDefaultMatches = async () => {
-    const newMatches = await dataManager.createDefaultMatches();
-    setMatches(newMatches);
-    showToast(`${newMatches.length} משחקים נוצרו`);
+    try {
+      const response = await fetch('/api/create-default-matches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setMatches(data.matches);
+        showToast(`${data.matches.length} משחקים נוצרו`);
+      } else {
+        showToast('שגיאה ביצירת המשחקים', 'error');
+      }
+    } catch (error) {
+      console.error('Error creating default matches:', error);
+      showToast('שגיאה ביצירת המשחקים', 'error');
+    }
   };
 
   if (!isAuthenticated) {
