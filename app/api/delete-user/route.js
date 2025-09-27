@@ -3,9 +3,15 @@ import { dataManager } from '../../../src/lib/data-manager';
 
 export async function DELETE(request) {
   try {
-    const { userId } = await request.json();
+    console.log('🗑️ API: Delete user request received');
+    
+    const body = await request.json();
+    console.log('📝 API: Request body:', body);
+    
+    const { userId } = body;
     
     if (!userId) {
+      console.log('❌ API: No userId provided');
       return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
@@ -14,7 +20,7 @@ export async function DELETE(request) {
     // זה ירוץ בצד השרת עם גישה ל-Vercel KV
     const result = await dataManager.deleteUser(userId);
     
-    console.log(`✅ API: Successfully deleted user ${userId}`);
+    console.log(`✅ API: Delete result:`, result);
     
     return NextResponse.json({
       success: true,

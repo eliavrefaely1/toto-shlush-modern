@@ -477,6 +477,8 @@ export default function AdminPage() {
   const deleteUserCompletely = async (userIdOrName) => {
     if (confirm('למחוק משתמש לחלוטין כולל כל הניחושים? פעולה זו בלתי הפיכה.')) {
       try {
+        console.log(`🗑️ Client: Attempting to delete user: ${userIdOrName}`);
+        
         // השתמש ב-API route שירוץ בצד השרת עם גישה ל-Vercel KV
         const response = await fetch('/api/delete-user', {
           method: 'DELETE',
@@ -486,11 +488,16 @@ export default function AdminPage() {
           body: JSON.stringify({ userId: userIdOrName }),
         });
 
+        console.log(`📡 Client: API response status: ${response.status}`);
+
         if (!response.ok) {
+          const errorData = await response.json();
+          console.error('❌ Client: API error:', errorData);
           throw new Error('Failed to delete user');
         }
 
         const result = await response.json();
+        console.log(`✅ Client: Delete result:`, result);
         
         // רענן את הנתונים
         await dataManager.calculateScores();
