@@ -295,7 +295,10 @@ class DataManager {
   }
 
   private async saveData(): Promise<boolean> {
-    if (!this.data) return false;
+    if (!this.data) {
+      console.log('❌ DataManager: No data to save');
+      return false;
+    }
     
     try {
       let kv;
@@ -303,10 +306,12 @@ class DataManager {
       // בדוק אם אנחנו בסביבת פיתוח ללא משתני סביבה של Vercel KV
       if (typeof window !== 'undefined' || !process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
         // השתמש ב-local KV mock לפיתוח מקומי
+        console.log('🏠 DataManager: Using local KV mock');
         const { kv: localKV } = await import('../../app/lib/local-kv');
         kv = localKV;
       } else {
         // השתמש ב-Vercel KV בפרודקשן
+        console.log('☁️ DataManager: Using Vercel KV');
         const { kv: vercelKV } = await import('@vercel/kv');
         kv = vercelKV;
       }
@@ -318,6 +323,7 @@ class DataManager {
       const GUESSES_KEY = (w: number) => `toto:week:${w}:guesses:v1`;
 
       // שמור את הנתונים הראשיים
+      console.log(`💾 DataManager: Saving main data (${this.data.users?.length || 0} users, ${this.data.userGuesses?.length || 0} guesses)`);
       await kv.set(KEY, this.data);
 
       // שמור את הטבלאות המפוצלות
@@ -332,18 +338,22 @@ class DataManager {
       await kv.set(META_KEY, metaToSave);
 
       if (Array.isArray(this.data.users)) {
+        console.log(`👥 DataManager: Saving ${this.data.users.length} users to KV`);
         await kv.set(USERS_KEY, this.data.users);
       }
 
       if (Array.isArray(this.data.matches)) {
+        console.log(`⚽ DataManager: Saving ${this.data.matches.length} matches to KV`);
         await kv.set(MATCHES_KEY(1), this.data.matches);
       }
 
       if (Array.isArray(this.data.userGuesses)) {
+        console.log(`🎯 DataManager: Saving ${this.data.userGuesses.length} guesses to KV`);
         await kv.set(GUESSES_KEY(1), this.data.userGuesses);
       }
 
       this.clearCache(); // Clear cache after successful save
+      console.log('✅ DataManager: Data saved successfully to KV');
       return true;
     } catch (error) {
       console.error('Failed to save data:', error);
@@ -444,28 +454,47 @@ class DataManager {
   }
 
   async deleteUser(userId: string): Promise<{ usersRemoved: number; guessesRemoved: number }> {
+    console.log(`🗑️ DataManager: Deleting user ${userId}...`);
     await this.initialize();
-    if (!this.data) return { usersRemoved: 0, guessesRemoved: 0 };
+    if (!this.data) {
+      console.log('❌ DataManager: No data available for deletion');
+      return { usersRemoved: 0, guessesRemoved: 0 };
+    }
 
     const user = this.data.users.find(u => u.id === userId);
-    if (!user) return { usersRemoved: 0, guessesRemoved: 0 };
+    if (!user) {
+      console.log(`❌ DataManager: User ${userId} not found`);
+      return { usersRemoved: 0, guessesRemoved: 0 };
+    }
+
+    console.log(`👤 DataManager: Found user ${user.name} to delete`);
 
     // Count guesses to be removed
     const guessesToRemove = this.data.userGuesses.filter(g => g.userId === userId);
     const guessesRemoved = guessesToRemove.length;
+    console.log(`🎯 DataManager: Found ${guessesRemoved} guesses to remove`);
 
     // Remove user
+    const usersBefore = this.data.users.length;
     this.data.users = this.data.users.filter(u => u.id !== userId);
+    console.log(`👥 DataManager: Users: ${usersBefore} → ${this.data.users.length}`);
     
     // Remove user's guesses
+    const guessesBefore = this.data.userGuesses.length;
     this.data.userGuesses = this.data.userGuesses.filter(g => g.userId !== userId);
+    console.log(`🎯 DataManager: Guesses: ${guessesBefore} → ${this.data.userGuesses.length}`);
 
-    await this.saveData();
+    console.log('💾 DataManager: Saving data to KV...');
+    const saveResult = await this.saveData();
+    console.log(`✅ DataManager: Save result: ${saveResult}`);
+    
     await this.createAutoBackup(`משתמש נמחק: ${user.name}`);
 
     // Clear cache to ensure fresh data on next read
     this.clearCache();
+    console.log('🧹 DataManager: Cache cleared');
 
+    console.log(`✅ DataManager: Successfully deleted user ${user.name}`);
     return { usersRemoved: 1, guessesRemoved };
   }
 
