@@ -50,7 +50,7 @@ export const VALIDATION_RULES = {
   NAME: {
     MIN_LENGTH: 2,
     MAX_LENGTH: 50,
-    PATTERN: /^[א-ת\s]+$/
+    PATTERN: /^[א-ת0-9\s]+$/
   },
   PHONE: {
     PATTERN: /^[0-9\-\+\(\)\s]+$/,

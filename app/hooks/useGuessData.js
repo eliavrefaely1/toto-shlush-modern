@@ -76,9 +76,23 @@ export const useGuessData = () => {
       }
 
       // שמירת הניחושים
+      console.log('💾 Adding user guess for:', formData.name);
       await dataManager.addUserGuess({ userId: user.id, name: formData.name, guesses: formData.guesses });
+      console.log('✅ User guess added successfully');
 
       setShowSuccess(true);
+      
+      // הגדר flag לעדכון הדירוג
+      sessionStorage.setItem('shouldRefreshLeaderboard', 'true');
+      
+      // עדכון מיידי של הדירוג
+      try {
+        console.log('🔄 Calculating scores...');
+        await dataManager.calculateScores();
+        console.log('✅ Scores calculated successfully');
+      } catch (error) {
+        console.error('Error calculating scores:', error);
+      }
       
       setTimeout(() => {
         router.push('/leaderboard');

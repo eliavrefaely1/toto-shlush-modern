@@ -17,54 +17,60 @@ export const useLeaderboardData = () => {
   // טען נתונים פעם אחת
   useEffect(() => {
     loadData();
+    
+    // בדוק אם הגענו לדף אחרי הוספת ניחוש
+    const shouldRefresh = sessionStorage.getItem('shouldRefreshLeaderboard');
+    if (shouldRefresh) {
+      sessionStorage.removeItem('shouldRefreshLeaderboard');
+      // עדכון מיידי
+      loadData();
+      // עדכון נוסף אחרי שנייה כדי לוודא שהכל מעודכן
+      setTimeout(() => loadData(), 1000);
+    }
+  }, []);
+
+  // עדכון מיידי כשמגיעים לדף (למשל אחרי הוספת ניחוש)
+  useEffect(() => {
+    const handleFocus = () => {
+      loadData();
+    };
+    
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, []);
+
+  // עדכון אוטומטי כל 30 שניות
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadData();
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(interval);
   }, []);
 
   const loadData = async () => {
-    // משוך דירוג מהיר מהשרת + נתוני משחקים וניחושים
+    // השתמש ישירות ב-dataManager החדש במקום API routes
+    console.log('🔄 Loading leaderboard data...');
     try {
-      const [lbRes, dataRes, potRes] = await Promise.all([
-        fetch(`/api/leaderboard`, { cache: 'no-store' }),
-        fetch(`/api/data?legacy=true`, { cache: 'no-store' }),
-        fetch(`/api/pot`, { cache: 'no-store' })
+      // אתחל את ה-dataManager
+      await dataManager.initialize();
+      
+      // טען את כל הנתונים ישירות
+      const [lb, matches, pot] = await Promise.all([
+        dataManager.getLeaderboard(),
+        dataManager.getMatches(),
+        dataManager.getPot()
       ]);
-      let lb = [];
-      if (lbRes.ok) {
-        const j = await lbRes.json();
-        lb = Array.isArray(j.leaderboard) ? j.leaderboard : [];
-      }
-      let matches = [], guesses = [], entryFee = 35;
-      if (dataRes.ok) {
-        const d = await dataRes.json();
-        matches = Array.isArray(d.matches) ? d.matches : [];
-        guesses = Array.isArray(d.userGuesses) ? d.userGuesses : [];
-        if (typeof d.entryFee === 'number') entryFee = d.entryFee;
-      }
-      let pot = { totalAmount: 0, numOfPlayers: 0, amountPerPlayer: entryFee };
-      if (potRes.ok) {
-        const p = await potRes.json();
-        pot = p;
-      }
 
-      // העשרת הדירוג בניחושים לצורך תצוגה מורחבת
-      const byUserId = new Map(guesses.map(g => [g.userId, g]));
-      const byName = new Map(guesses.map(g => [String(g.name||'').toLowerCase().trim(), g]));
-      const enriched = lb.map(e => {
-        const g = byUserId.get(e.userId) || byName.get(String(e.name||'').toLowerCase().trim());
-        return g ? { ...e, guesses: g.guesses } : e;
-      });
-
-      setLeaderboard(enriched);
+      console.log(`✅ Loaded ${lb.length} leaderboard entries`);
+      setLeaderboard(lb);
       setMatchesForWeek(matches);
       setPot(pot);
     } catch (e) {
       console.error('Error loading data:', e);
-      // נפילה — fallback לנתונים מקומיים
-      const currentLeaderboard = await dataManager.getLeaderboard(1);
-      const currentPot = await dataManager.getPot(1);
-      const weekMatches = await dataManager.getMatches(1) || [];
-      setLeaderboard(currentLeaderboard);
-      setPot(currentPot);
-      setMatchesForWeek(weekMatches);
+      setLeaderboard([]);
+      setMatchesForWeek([]);
+      setPot({ totalAmount: 0, numOfPlayers: 0, amountPerPlayer: 35 });
     }
   };
 

@@ -140,14 +140,23 @@ class DataManager {
       }
 
       // בצד השרת, נסה לטעון ישירות מה-KV
-      const { kv } = await import('@vercel/kv');
+      let kv;
+      if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
+        // השתמש ב-local KV mock לפיתוח מקומי
+        const { kv: localKV } = await import('../../app/lib/local-kv');
+        kv = localKV;
+      } else {
+        // השתמש ב-Vercel KV בפרודקשן
+        const { kv: vercelKV } = await import('@vercel/kv');
+        kv = vercelKV;
+      }
       
       // מפתחות KV הישנים
       const KEY = 'toto:data:v1';
       const META_KEY = 'toto:meta:v1';
       const USERS_KEY = 'toto:users:v1';
-      const MATCHES_KEY = (w) => `toto:week:${w}:matches:v1`;
-      const GUESSES_KEY = (w) => `toto:week:${w}:guesses:v1`;
+      const MATCHES_KEY = (w: number) => `toto:week:${w}:matches:v1`;
+      const GUESSES_KEY = (w: number) => `toto:week:${w}:guesses:v1`;
 
       // טען נתונים
       const [mainData, metaData, usersData, matchesData, guessesData] = await Promise.all([
@@ -159,13 +168,13 @@ class DataManager {
       ]);
 
       // בדוק אם יש נתונים
-      const hasUsers = Array.isArray(usersData) ? usersData.length > 0 : (Array.isArray(mainData?.users) ? mainData.users.length > 0 : false);
+      const hasUsers = Array.isArray(usersData) ? usersData.length > 0 : (Array.isArray((mainData as any)?.users) ? (mainData as any).users.length > 0 : false);
       if (!hasUsers) return null;
 
       // המר לפורמט החדש
-      const users = Array.isArray(usersData) ? usersData : (Array.isArray(mainData?.users) ? mainData.users : []);
-      const matches = Array.isArray(matchesData) ? matchesData : (Array.isArray(mainData?.matches) ? mainData.matches : []);
-      const userGuesses = Array.isArray(guessesData) ? guessesData : (Array.isArray(mainData?.userGuesses) ? mainData.userGuesses : []);
+      const users = Array.isArray(usersData) ? usersData : (Array.isArray((mainData as any)?.users) ? (mainData as any).users : []);
+      const matches = Array.isArray(matchesData) ? matchesData : (Array.isArray((mainData as any)?.matches) ? (mainData as any).matches : []);
+      const userGuesses = Array.isArray(guessesData) ? guessesData : (Array.isArray((mainData as any)?.userGuesses) ? (mainData as any).userGuesses : []);
       
       const settings = metaData || mainData || {};
       
@@ -174,12 +183,12 @@ class DataManager {
         matches,
         userGuesses,
         settings: {
-          adminPassword: settings.adminPassword || DEFAULT_VALUES.SETTINGS.adminPassword,
-          entryFee: settings.entryFee || DEFAULT_VALUES.SETTINGS.entryFee,
-          totoFirstPrize: settings.totoFirstPrize || DEFAULT_VALUES.SETTINGS.totoFirstPrize,
-          submissionsLocked: settings.submissionsLocked || false,
-          countdownActive: settings.countdownActive || false,
-          countdownTarget: settings.countdownTarget || '',
+          adminPassword: (settings as any).adminPassword || DEFAULT_VALUES.SETTINGS.adminPassword,
+          entryFee: (settings as any).entryFee || DEFAULT_VALUES.SETTINGS.entryFee,
+          totoFirstPrize: (settings as any).totoFirstPrize || DEFAULT_VALUES.SETTINGS.totoFirstPrize,
+          submissionsLocked: (settings as any).submissionsLocked || false,
+          countdownActive: (settings as any).countdownActive || false,
+          countdownTarget: (settings as any).countdownTarget || '',
           currentWeek: 1
         }
       };
@@ -289,11 +298,53 @@ class DataManager {
     if (!this.data) return false;
     
     try {
-      const response = await apiClient.updateData(this.data);
-      if (response.ok) {
-        this.clearCache(); // Clear cache after successful save
+      let kv;
+      
+      // בדוק אם אנחנו בסביבת פיתוח ללא משתני סביבה של Vercel KV
+      if (typeof window !== 'undefined' || !process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
+        // השתמש ב-local KV mock לפיתוח מקומי
+        const { kv: localKV } = await import('../../app/lib/local-kv');
+        kv = localKV;
+      } else {
+        // השתמש ב-Vercel KV בפרודקשן
+        const { kv: vercelKV } = await import('@vercel/kv');
+        kv = vercelKV;
       }
-      return response.ok;
+
+      const KEY = 'toto:data:v1';
+      const META_KEY = 'toto:meta:v1';
+      const USERS_KEY = 'toto:users:v1';
+      const MATCHES_KEY = (w: number) => `toto:week:${w}:matches:v1`;
+      const GUESSES_KEY = (w: number) => `toto:week:${w}:guesses:v1`;
+
+      // שמור את הנתונים הראשיים
+      await kv.set(KEY, this.data);
+
+      // שמור את הטבלאות המפוצלות
+      const metaToSave = {
+        adminPassword: this.data.settings?.adminPassword || '1234',
+        entryFee: this.data.settings?.entryFee || 35,
+        totoFirstPrize: this.data.settings?.totoFirstPrize || 8000000,
+        submissionsLocked: !!this.data.settings?.submissionsLocked,
+        countdownActive: !!this.data.settings?.countdownActive,
+        countdownTarget: this.data.settings?.countdownTarget || ''
+      };
+      await kv.set(META_KEY, metaToSave);
+
+      if (Array.isArray(this.data.users)) {
+        await kv.set(USERS_KEY, this.data.users);
+      }
+
+      if (Array.isArray(this.data.matches)) {
+        await kv.set(MATCHES_KEY(1), this.data.matches);
+      }
+
+      if (Array.isArray(this.data.userGuesses)) {
+        await kv.set(GUESSES_KEY(1), this.data.userGuesses);
+      }
+
+      this.clearCache(); // Clear cache after successful save
+      return true;
     } catch (error) {
       console.error('Failed to save data:', error);
       return false;
@@ -367,6 +418,9 @@ class DataManager {
     this.data.users.push(newUser);
     await this.saveData();
     await this.createAutoBackup(`משתמש חדש נרשם: ${userData.name}`);
+
+    // נקה cache כדי שהדירוג יתעדכן
+    this.clearCache();
 
     return newUser;
   }
@@ -527,7 +581,80 @@ class DataManager {
     };
 
     this.data.userGuesses.push(newGuess);
+    console.log('💾 Saving data to KV...');
     await this.saveData();
+    console.log('✅ Data saved to KV successfully');
+    
+    // חשב ציונים מיד אחרי הוספת ניחוש
+    console.log('🔄 Calculating scores in DataManager...');
+    await this.calculateScores();
+    console.log('✅ Scores calculated in DataManager');
+    
+    // נקה cache כדי שהדירוג יתעדכן
+    this.clearCache();
+    
+    // טען מחדש את הנתונים מה-KV כדי לוודא שהכל מעודכן
+    console.log('🔄 Reloading data from KV...');
+    try {
+      let kv;
+      if (!process.env.KV_REST_API_URL || !process.env.KV_REST_API_TOKEN) {
+        // השתמש ב-local KV mock לפיתוח מקומי
+        const { kv: localKV } = await import('../../app/lib/local-kv');
+        kv = localKV;
+      } else {
+        // השתמש ב-Vercel KV בפרודקשן
+        const { kv: vercelKV } = await import('@vercel/kv');
+        kv = vercelKV;
+      }
+      
+      const KEY = 'toto:data:v1';
+      const META_KEY = 'toto:meta:v1';
+      const USERS_KEY = 'toto:users:v1';
+      const MATCHES_KEY = (w: number) => `toto:week:${w}:matches:v1`;
+      const GUESSES_KEY = (w: number) => `toto:week:${w}:guesses:v1`;
+
+      // טען נתונים
+      const [mainData, metaData, usersData, matchesData, guessesData] = await Promise.all([
+        kv.get(KEY).catch(() => null),
+        kv.get(META_KEY).catch(() => null),
+        kv.get(USERS_KEY).catch(() => null),
+        kv.get(MATCHES_KEY(1)).catch(() => null),
+        kv.get(GUESSES_KEY(1)).catch(() => null)
+      ]);
+
+      // בדוק אם יש נתונים
+      const hasUsers = Array.isArray(usersData) ? usersData.length > 0 : (Array.isArray((mainData as any)?.users) ? (mainData as any).users.length > 0 : false);
+      if (hasUsers) {
+        // המר לפורמט החדש
+        const users = Array.isArray(usersData) ? usersData : (Array.isArray((mainData as any)?.users) ? (mainData as any).users : []);
+        const matches = Array.isArray(matchesData) ? matchesData : (Array.isArray((mainData as any)?.matches) ? (mainData as any).matches : []);
+        const userGuesses = Array.isArray(guessesData) ? guessesData : (Array.isArray((mainData as any)?.userGuesses) ? (mainData as any).userGuesses : []);
+        
+        const settings = metaData || mainData || {};
+        
+        this.data = {
+          users,
+          matches,
+          userGuesses,
+          settings: {
+            adminPassword: (settings as any).adminPassword || DEFAULT_VALUES.SETTINGS.adminPassword,
+            entryFee: (settings as any).entryFee || DEFAULT_VALUES.SETTINGS.entryFee,
+            totoFirstPrize: (settings as any).totoFirstPrize || DEFAULT_VALUES.SETTINGS.totoFirstPrize,
+            submissionsLocked: (settings as any).submissionsLocked || false,
+            countdownActive: (settings as any).countdownActive || false,
+            countdownTarget: (settings as any).countdownTarget || '',
+            currentWeek: 1
+          }
+        };
+        this.normalizeData();
+        console.log('✅ Data reloaded from KV');
+      } else {
+        console.log('⚠️ No data reloaded from KV');
+      }
+    } catch (error) {
+      console.error('❌ Error reloading data from KV:', error);
+    }
+    
     await this.createAutoBackup(`ניחוש חדש: ${guessData.name}`);
 
     return newGuess;
@@ -560,6 +687,9 @@ class DataManager {
     this.data.userGuesses = this.data.userGuesses.filter(g => g.id !== guessId);
     await this.saveData();
     await this.createAutoBackup(`ניחוש נמחק: ${guess.name}`);
+
+    // נקה cache כדי שהדירוג יתעדכן
+    this.clearCache();
 
     return true;
   }
@@ -595,14 +725,19 @@ class DataManager {
 
   // Leaderboard
   async getLeaderboard(): Promise<LeaderboardEntry[]> {
+    console.log('🔄 DataManager: Getting leaderboard...');
     await this.initialize();
-    if (!this.data) return [];
+    if (!this.data) {
+      console.log('❌ DataManager: No data available');
+      return [];
+    }
 
+    console.log(`📊 DataManager: Found ${this.data.users.length} users and ${this.data.userGuesses.length} guesses`);
     const guesses = await this.calculateScores();
     const users = this.data.users;
     const userMap = new Map(users.map(u => [u.id, u]));
 
-    return guesses
+    const leaderboard = guesses
       .map(guess => {
         const user = userMap.get(guess.userId);
         return {
@@ -624,6 +759,9 @@ class DataManager {
         };
       })
       .sort((a, b) => b.score - a.score);
+
+    console.log(`✅ DataManager: Generated leaderboard with ${leaderboard.length} entries`);
+    return leaderboard;
   }
 
   // Pot Calculation
