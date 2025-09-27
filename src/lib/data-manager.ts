@@ -439,15 +439,20 @@ class DataManager {
     };
 
     await this.saveData();
+    this.clearCache(); // Clear cache after user update
     return this.data.users[userIndex];
   }
 
-  async deleteUser(userId: string): Promise<boolean> {
+  async deleteUser(userId: string): Promise<{ usersRemoved: number; guessesRemoved: number }> {
     await this.initialize();
-    if (!this.data) return false;
+    if (!this.data) return { usersRemoved: 0, guessesRemoved: 0 };
 
     const user = this.data.users.find(u => u.id === userId);
-    if (!user) return false;
+    if (!user) return { usersRemoved: 0, guessesRemoved: 0 };
+
+    // Count guesses to be removed
+    const guessesToRemove = this.data.userGuesses.filter(g => g.userId === userId);
+    const guessesRemoved = guessesToRemove.length;
 
     // Remove user
     this.data.users = this.data.users.filter(u => u.id !== userId);
@@ -458,7 +463,10 @@ class DataManager {
     await this.saveData();
     await this.createAutoBackup(`משתמש נמחק: ${user.name}`);
 
-    return true;
+    // Clear cache to ensure fresh data on next read
+    this.clearCache();
+
+    return { usersRemoved: 1, guessesRemoved };
   }
 
   // Match Management
@@ -674,6 +682,7 @@ class DataManager {
     };
 
     await this.saveData();
+    this.clearCache(); // Clear cache after guess update
     return this.data.userGuesses[guessIndex];
   }
 
@@ -799,6 +808,7 @@ class DataManager {
     };
 
     await this.saveData();
+    this.clearCache(); // Clear cache after settings update
     return true;
   }
 
@@ -814,6 +824,7 @@ class DataManager {
     this.data.userGuesses[guessIndex].updatedAt = new Date().toISOString();
 
     await this.saveData();
+    this.clearCache(); // Clear cache after payment status update
     return true;
   }
 

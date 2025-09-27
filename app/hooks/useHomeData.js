@@ -97,29 +97,19 @@ export const useHomeData = () => {
     setIsRefreshing(true);
     try {
       await dataManager.initialize();
-      try {
-        const w = dataManager.getSettings().currentWeek || 1;
-        const resPot = await fetch(`/api/pot?week=${w}`, { cache: 'no-store' });
-        if (resPot.ok) setPot(await resPot.json()); else setPot(dataManager.getPot());
-      } catch (_) { setPot(dataManager.getPot()); }
-      try {
-        const w = dataManager.getSettings().currentWeek || 1;
-        const res = await fetch(`/api/leaderboard?week=${w}`, { cache: 'no-store' });
-        if (res.ok) {
-          const j = await res.json();
-          setLeaderboard(Array.isArray(j.leaderboard) ? j.leaderboard : []);
-        } else {
-          setLeaderboard(await dataManager.getLeaderboard());
-        }
-      } catch (_) {
-        setLeaderboard(await dataManager.getLeaderboard());
-      }
-      // רענן גם משחקים
-      const currentMatches = dataManager.getMatches();
+      
+      // השתמש ישירות ב-dataManager במקום API routes
+      const [currentMatches, currentSettings, currentPot, currentLeaderboard] = await Promise.all([
+        dataManager.getMatches(),
+        dataManager.getSettings(),
+        dataManager.getPot(),
+        dataManager.getLeaderboard()
+      ]);
+      
       setMatches(currentMatches);
-      // רענן הגדרות
-      const s = dataManager.getSettings();
-      setSettings(s);
+      setSettings(currentSettings);
+      setPot(currentPot);
+      setLeaderboard(currentLeaderboard);
     } finally {
       // ריענון מלא כמו F5
       if (typeof window !== 'undefined') {
