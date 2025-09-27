@@ -476,10 +476,31 @@ export default function AdminPage() {
 
   const deleteUserCompletely = async (userIdOrName) => {
     if (confirm('למחוק משתמש לחלוטין כולל כל הניחושים? פעולה זו בלתי הפיכה.')) {
-      const res = await dataManager.deleteUser(userIdOrName);
-      await dataManager.calculateScores();
-      await loadAdminData();
-      showToast(`נמחקו ${res.usersRemoved} משתמש/ים ו-${res.guessesRemoved} ניחושים.`);
+      try {
+        // השתמש ב-API route שירוץ בצד השרת עם גישה ל-Vercel KV
+        const response = await fetch('/api/delete-user', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ userId: userIdOrName }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to delete user');
+        }
+
+        const result = await response.json();
+        
+        // רענן את הנתונים
+        await dataManager.calculateScores();
+        await loadAdminData();
+        
+        showToast(`נמחקו ${result.usersRemoved} משתמש/ים ו-${result.guessesRemoved} ניחושים.`);
+      } catch (error) {
+        console.error('Error deleting user:', error);
+        showToast('שגיאה במחיקת המשתמש');
+      }
     }
   };
 
