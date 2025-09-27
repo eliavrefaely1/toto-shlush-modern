@@ -409,7 +409,28 @@ export default function AdminPage() {
 
   const updateSettings = async (newSettings) => {
     try {
-      await dataManager.updateSettings(newSettings);
+      console.log(`⚙️ Client: Updating settings:`, newSettings);
+      
+      // השתמש ב-API route שירוץ בצד השרת עם גישה ל-Vercel KV
+      const response = await fetch('/api/update-settings', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          settings: newSettings
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('❌ Client: API error:', errorData);
+        throw new Error('Failed to update settings');
+      }
+
+      const result = await response.json();
+      console.log(`✅ Client: Settings updated successfully:`, result);
+      
       // עדכן את ה-state מיד כדי שה-UI יתעדכן
       setSettings(prev => ({ ...prev, ...newSettings }));
       showToast('הגדרות נשמרו בהצלחה');
@@ -430,8 +451,23 @@ export default function AdminPage() {
     
     // הגדר timeout חדש
     const timeout = setTimeout(async () => {
-      await dataManager.updateSettings(newSettings);
-      showToast('הגדרות נשמרו בהצלחה');
+      try {
+        const response = await fetch('/api/update-settings', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            settings: newSettings
+          }),
+        });
+
+        if (response.ok) {
+          showToast('הגדרות נשמרו בהצלחה');
+        }
+      } catch (error) {
+        console.error('Error updating settings:', error);
+      }
     }, 1000); // המתן שנייה אחרי שהמשתמש הפסיק להקליד
     
     setUpdateTimeout(timeout);
@@ -439,9 +475,38 @@ export default function AdminPage() {
 
   const toggleLockSubmissions = async () => {
     const next = !settings.submissionsLocked;
-    await dataManager.updateSettings({ submissionsLocked: next });
-    setSettings({ ...settings, submissionsLocked: next });
-    showToast(next ? 'הגשה ננעלה' : 'הגשה נפתחה');
+    
+    try {
+      console.log(`🔒 Client: Toggling submissions lock to: ${next}`);
+      
+      // השתמש ב-API route שירוץ בצד השרת עם גישה ל-Vercel KV
+      const response = await fetch('/api/update-settings', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          settings: { submissionsLocked: next }
+        }),
+      });
+
+      console.log(`📡 Client: API response status: ${response.status}`);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('❌ Client: API error:', errorData);
+        throw new Error('Failed to update settings');
+      }
+
+      const result = await response.json();
+      console.log(`✅ Client: Settings updated successfully:`, result);
+      
+      setSettings({ ...settings, submissionsLocked: next });
+      showToast(next ? 'הגשה ננעלה' : 'הגשה נפתחה');
+    } catch (error) {
+      console.error('Error updating settings:', error);
+      showToast('שגיאה בעדכון ההגדרות', 'error');
+    }
   };
 
   // מערכת השבועות הוסרה - משחק אחד בלבד
