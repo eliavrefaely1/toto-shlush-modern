@@ -424,6 +424,32 @@ export default function AdminPage() {
     }
   };
 
+  // שחזור גיבוי
+  const restoreBackup = async (backupData) => {
+    try {
+      console.log('🔄 Restoring backup:', backupData.backupId);
+      
+      const response = await fetch('/api/restore-backup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(backupData),
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        showToast(`גיבוי שוחזר בהצלחה: ${result.restored.matches} משחקים, ${result.restored.users} משתמשים, ${result.restored.guesses} ניחושים`);
+        
+        // רענון הנתונים
+        await loadAdminData();
+      } else {
+        throw new Error('Failed to restore backup');
+      }
+    } catch (error) {
+      console.error('Error restoring backup:', error);
+      showToast('שגיאה בשחזור הגיבוי.', 'error');
+    }
+  };
+
   // פורמט להצגת תאריך ושעה
   const formatDateDisplay = (d) => {
     if (!d) return '';
@@ -982,6 +1008,7 @@ export default function AdminPage() {
               deleteMatch={deleteMatch}
               formatDateForInput={formatDateForInput}
               formatDateDisplay={formatDateDisplay}
+              restoreBackup={restoreBackup}
             />
           )}
           {activeTab === 'participants' && (

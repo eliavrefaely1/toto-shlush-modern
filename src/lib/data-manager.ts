@@ -519,20 +519,30 @@ class DataManager {
     date?: string;
     time?: string;
     category?: string;
+    league?: string;
+    day?: string;
+    id?: string;
+    week?: number;
+    result?: string;
+    createdAt?: string;
+    updatedAt?: string;
   }): Promise<Match> {
     await this.initialize();
     if (!this.data) throw createError(ERROR_MESSAGES.SERVER_ERROR);
 
     const newMatch: Match = {
-      id: generateId(),
+      id: matchData.id || generateId(),
       homeTeam: matchData.homeTeam.trim(),
       awayTeam: matchData.awayTeam.trim(),
       date: matchData.date || '',
       time: matchData.time || '',
-      result: DEFAULT_VALUES.MATCH.result,
+      result: matchData.result || DEFAULT_VALUES.MATCH.result,
       category: matchData.category || DEFAULT_VALUES.MATCH.category,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      league: matchData.league || '',
+      day: matchData.day || '',
+      week: matchData.week || 1,
+      createdAt: matchData.createdAt || new Date().toISOString(),
+      updatedAt: matchData.updatedAt || new Date().toISOString()
     };
 
     this.data.matches.push(newMatch);
@@ -571,6 +581,16 @@ class DataManager {
     await this.createAutoBackup(`משחק נמחק: ${match.homeTeam} vs ${match.awayTeam}`);
 
     return true;
+  }
+
+  async clearAllMatches(): Promise<void> {
+    await this.initialize();
+    if (!this.data) return;
+
+    const matchCount = this.data.matches.length;
+    this.data.matches = [];
+    await this.saveData();
+    await this.createAutoBackup(`נמחקו ${matchCount} משחקים`);
   }
 
   // Guess Management

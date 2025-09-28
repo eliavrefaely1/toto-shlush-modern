@@ -17,6 +17,9 @@ export interface Match {
   time?: string;
   result?: string;
   category: string;
+  league?: string;
+  day?: string;
+  week?: number;
   createdAt: string;
   updatedAt: string;
 }
