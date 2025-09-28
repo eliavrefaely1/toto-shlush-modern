@@ -1,9 +1,0 @@
-{
-    "currentWeek": 1,
-    "adminPassword": "1234",
-    "entryFee": 30,
-    "totoFirstPrize": 10000000,
-    "submissionsLocked": true,
-    "countdownActive": false,
-    "countdownTarget": ""
-  }
