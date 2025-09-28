@@ -79,3 +79,8 @@ jspm_packages/
 # Sentry Config File
 .env.sentry-build-plugin
 
+# Backup files
+backup-*.json
+backups/
+backup-data.js
+

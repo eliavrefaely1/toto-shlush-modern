@@ -10,7 +10,9 @@
     "start": "next start -p 3001",
     "start:3001": "next start -p 3001",
     "lint": "next lint",
-    "clean": "rm -rf .next node_modules/.cache"
+    "clean": "rm -rf .next node_modules/.cache",
+    "backup": "node backup-data.js",
+    "setup-kv": "node setup-local-kv.js"
   },
   "repository": {
     "type": "git",
