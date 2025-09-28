@@ -851,4 +851,5 @@ class DataManager {
 
 // יצירת instance גלובלי
 const dataManager = new DataManager();
+export { dataManager };
 export default dataManager;

@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server'
-import { dataManager } from '../../../src/lib/data-manager'
 
 // Rate limiting storage
 const rateLimitMap = new Map()
@@ -330,58 +329,46 @@ export async function GET(request) {
       }
     }
     
-    // טען נתונים מה-DataManager החדש
-    await dataManager.initialize()
-    if (searchParams.get('diag') === '1') {
-      // החזר סטטוס משתני סביבה
-      return Response.json({
-        ok: true,
-        env: {
-          KV_URL: !!process.env.KV_URL,
-          KV_REST_API_URL: !!process.env.KV_REST_API_URL,
-          KV_REST_API_TOKEN: !!process.env.KV_REST_API_TOKEN,
-          KV_REST_API_READ_ONLY_TOKEN: !!process.env.KV_REST_API_READ_ONLY_TOKEN,
-          UPSTASH_REDIS_REST_URL: !!process.env.UPSTASH_REDIS_REST_URL,
-          UPSTASH_REDIS_REST_TOKEN: !!process.env.UPSTASH_REDIS_REST_TOKEN,
-          ADMIN_TOKEN: !!process.env.ADMIN_TOKEN,
-        },
-        dataManagerInitialized: true
-      }, { headers: { 'Cache-Control': 'no-store' } })
-    }
-
-    const fieldsParam = searchParams.get('fields') || searchParams.get('only')
-    const wanted = fieldsParam ? new Set(fieldsParam.split(',').map(s => s.trim())) : null
-
-    // טען את כל הנתונים מה-DataManager
-    const [users, matches, userGuesses, settings] = await Promise.all([
-      dataManager.getUsers(),
-      dataManager.getMatches(),
-      dataManager.getUserGuesses(),
-      dataManager.getSettings()
-    ])
+    // טען נתונים ישירות מה-KV
+    const fieldsParam = searchParams.get('fields') || searchParams.get('only');
+    const wanted = fieldsParam ? new Set(fieldsParam.split(',').map(s => s.trim())) : null;
+    
+    const raw = (await kvInstance.get(KEY)) || defaultData;
+    const meta = await kvInstance.get(META_KEY).catch(()=>null);
+    const users = await kvInstance.get(USERS_KEY).catch(()=>null);
+    const matches = await kvInstance.get(MATCHES_KEY(1)).catch(()=>null);
+    const guesses = await kvInstance.get(GUESSES_KEY(1)).catch(()=>null);
 
     let data = {
-      users,
-      matches,
-      userGuesses,
-      settings,
-      entryFee: settings?.entryFee || 35
-    }
+      users: Array.isArray(users) ? users : (Array.isArray(raw.users) ? raw.users : []),
+      matches: Array.isArray(matches) ? matches : (Array.isArray(raw.matches) ? raw.matches : []),
+      userGuesses: Array.isArray(guesses) ? guesses : (Array.isArray(raw.userGuesses) ? raw.userGuesses : []),
+      settings: {
+        adminPassword: meta?.adminPassword ?? raw.adminPassword,
+        entryFee: meta?.entryFee ?? raw.entryFee,
+        totoFirstPrize: meta?.totoFirstPrize ?? raw.totoFirstPrize,
+        submissionsLocked: meta?.submissionsLocked ?? raw.submissionsLocked,
+        countdownActive: meta?.countdownActive ?? raw.countdownActive,
+        countdownTarget: meta?.countdownTarget ?? raw.countdownTarget,
+        adminEmail: raw.adminEmail || ''
+      },
+      entryFee: meta?.entryFee ?? raw.entryFee ?? 35
+    };
 
     // Filter by requested fields
     if (wanted) {
-      const filtered = {}
+      const filtered = {};
       for (const field of wanted) {
         if (field in data) {
-          filtered[field] = data[field]
+          filtered[field] = data[field];
         }
       }
-      data = filtered
+      data = filtered;
     }
 
     return Response.json(data, {
       headers: { 'Cache-Control': 'no-store' }
-    })
+    });
   } catch (error) {
     console.error('Error in data GET:', error)
     return Response.json({ 

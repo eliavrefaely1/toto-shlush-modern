@@ -17,7 +17,6 @@ const SettingsTab = ({
   countdownTime, 
   setCountdownTime, 
   getAdminHeaders, 
-  dataManager, 
   loadAdminData, 
   showToast 
 }) => {
@@ -150,9 +149,8 @@ const SettingsTab = ({
                       showToast('יש להזין תאריך ושעה ליעד', 'error'); 
                       return; 
                     }
-                    dataManager.updateSettings({ countdownActive: !!(countdownActiveLocal && target), countdownTarget: target });
-                    await (dataManager.mergeAndSave ? dataManager.mergeAndSave({ headers: getAdminHeaders(), preferLocalSettings: true }) : Promise.resolve());
-                    await dataManager.syncFromServer();
+                    updateSettings({ countdownActive: !!(countdownActiveLocal && target), countdownTarget: target });
+                    await loadAdminData();
                     loadAdminData();
                     showToast('הגדרות שעון נשמרו');
                   }} 

@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Shield, Eye, EyeOff, ArrowLeft } from 'lucide-react';
-import { dataManager } from '../../src/lib/data-manager';
 
 // Import components
 import AdminHeader from './components/AdminHeader';
@@ -259,7 +258,7 @@ export default function AdminPage() {
       
       // טען את כל הנתונים מהשרת דרך API routes
       const [dataResponse, leaderboardResponse, potResponse] = await Promise.all([
-        fetch('/api/data'),
+        fetch('/api/data?legacy=true'),
         fetch('/api/leaderboard'),
         fetch('/api/pot')
       ]);
@@ -321,7 +320,7 @@ export default function AdminPage() {
     e.preventDefault();
     
     // Check password
-    if (password === '1234' || dataManager.authenticateAdmin(password)) {
+    if (password === '1234') {
       setIsAuthenticated(true);
     } else {
       alert('סיסמה שגויה! הסיסמה הנכונה היא: 1234');
@@ -1067,7 +1066,6 @@ export default function AdminPage() {
               countdownTime={countdownTime}
               setCountdownTime={setCountdownTime}
               getAdminHeaders={getAdminHeaders}
-              dataManager={dataManager}
               loadAdminData={loadAdminData}
               showToast={showToast}
             />

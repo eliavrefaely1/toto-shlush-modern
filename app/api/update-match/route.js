@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { dataManager } from '../../../src/lib/data-manager';
+import { dataManager } from '../../lib/data';
 import { broadcastMessage, WEBSOCKET_EVENTS } from '../../../src/lib/websocket-server';
 
 export async function PUT(request) {

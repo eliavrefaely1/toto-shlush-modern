@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { dataManager } from '../../../src/lib/data-manager';
+import { dataManager } from '../../lib/data';
 
 export async function POST(request) {
   try {

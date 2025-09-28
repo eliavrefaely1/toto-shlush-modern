@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { dataManager } from '../../../src/lib/data-manager';
 
 export const useAdminData = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -31,17 +30,27 @@ export const useAdminData = () => {
     setIsLoading(true);
     try {
       console.log('Loading admin data...');
-      const currentSettings = await dataManager.getSettings();
+      
+      // טען את כל הנתונים מהשרת דרך API routes
+      const [dataResponse, leaderboardResponse, potResponse] = await Promise.all([
+        fetch('/api/data?legacy=true'),
+        fetch('/api/leaderboard'),
+        fetch('/api/pot')
+      ]);
+
+      const data = await dataResponse.json();
+      const currentSettings = data.settings;
       console.log('Settings loaded:', currentSettings);
-      const currentMatches = await dataManager.getMatches();
+      const currentMatches = data.matches;
       console.log('Matches loaded:', currentMatches);
-      const currentParticipants = await dataManager.getUsers();
+      const currentParticipants = data.users;
       console.log('Participants loaded:', currentParticipants);
-      const currentGuesses = await dataManager.getUserGuesses();
+      const currentGuesses = data.userGuesses;
       console.log('Guesses loaded:', currentGuesses);
-      const currentLeaderboard = await dataManager.getLeaderboard();
+      const leaderboardData = await leaderboardResponse.json();
+      const currentLeaderboard = leaderboardData.leaderboard || leaderboardData;
       console.log('Leaderboard loaded:', currentLeaderboard);
-      const currentPot = await dataManager.getPot();
+      const currentPot = await potResponse.json();
       console.log('Pot loaded:', currentPot);
 
       // Debug: Check for duplicate user IDs
@@ -68,94 +77,315 @@ export const useAdminData = () => {
       setCountdownActiveLocal(!!currentSettings.countdownActive);
       const tgt = String(currentSettings.countdownTarget || '');
       if (tgt) {
-        const d = tgt.includes('T') ? tgt.split('T')[0] : tgt;
-        const t = tgt.includes('T') ? tgt.split('T')[1].slice(0,5) : '';
-        setCountdownDate(d);
-        setCountdownTime(t);
-      } else {
-        setCountdownDate('');
-        setCountdownTime('');
+        setCountdownDate(tgt);
       }
     } catch (error) {
-      // suppressed console output
+      console.error('Error loading admin data:', error);
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
-  const refreshAll = async () => {
+  const refreshData = async () => {
     setIsRefreshing(true);
     try {
-      await dataManager.initialize();
-      loadAdminData();
+      await loadAdminData();
     } finally {
-      // ריענון מלא כמו F5
-      if (typeof window !== 'undefined') {
-        window.location.reload();
-      }
-    }
-  };
-
-  const resetLocalCache = async () => {
-    if (!confirm('לאפס קאש מקומי ולמשוך מהשרת?')) return;
-    try {
-      showToast('מרענן נתונים מהשרת');
-      await dataManager.initialize();
-      loadAdminData();
-    } finally {
-      if (typeof window !== 'undefined') window.location.reload();
+      setIsRefreshing(false);
     }
   };
 
   const updateSettings = async (newSettings) => {
     try {
-      await dataManager.updateSettings(newSettings);
-      // עדכן את ה-state מיד כדי שה-UI יתעדכן
-      setSettings(prev => ({ ...prev, ...newSettings }));
-      showToast('הגדרות נשמרו בהצלחה');
+      const response = await fetch('/api/update-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newSettings),
+      });
+      
+      if (response.ok) {
+        await loadAdminData();
+        return true;
+      }
+      return false;
     } catch (error) {
       console.error('Error updating settings:', error);
-      showToast('שגיאה בשמירת ההגדרות', 'error');
+      return false;
     }
   };
 
-  const debouncedUpdateSettings = (newSettings) => {
-    // עדכן את ה-state מיד
-    setSettings(prev => ({ ...prev, ...newSettings }));
-    
-    // נקה timeout קודם אם קיים
-    if (updateTimeout) {
-      clearTimeout(updateTimeout);
-    }
-    
-    // הגדר timeout חדש
-    const timeout = setTimeout(async () => {
-      await dataManager.updateSettings(newSettings);
-      showToast('הגדרות נשמרו בהצלחה');
-    }, 1000); // המתן שנייה אחרי שהמשתמש הפסיק להקליד
-    
-    setUpdateTimeout(timeout);
-  };
-
-  const showToast = (msg, type = 'success') => {
-    // This will be handled by the parent component
-    console.log(`Toast: ${msg} (${type})`);
-  };
-
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (updateTimeout) {
-        clearTimeout(updateTimeout);
+  const updateCountdown = async (active, target) => {
+    try {
+      const response = await fetch('/api/update-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          countdownActive: active,
+          countdownTarget: target
+        }),
+      });
+      
+      if (response.ok) {
+        await loadAdminData();
+        return true;
       }
-    };
-  }, [updateTimeout]);
+      return false;
+    } catch (error) {
+      console.error('Error updating countdown:', error);
+      return false;
+    }
+  };
+
+  const updateAdminEmail = async (email) => {
+    try {
+      const response = await fetch('/api/update-settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminEmail: email }),
+      });
+      
+      if (response.ok) {
+        await loadAdminData();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error updating admin email:', error);
+      return false;
+    }
+  };
+
+  const createNewWeek = async () => {
+    try {
+      const response = await fetch('/api/create-default-matches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cleanPreviousMatches: cleanNewWeekMatches }),
+      });
+      
+      if (response.ok) {
+        await loadAdminData();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error creating new week:', error);
+      return false;
+    }
+  };
+
+  const clearAllMatches = async () => {
+    try {
+      const response = await fetch('/api/clear-matches', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      
+      if (response.ok) {
+        await loadAdminData();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error clearing matches:', error);
+      return false;
+    }
+  };
+
+  const clearAllGuesses = async () => {
+    try {
+      const response = await fetch('/api/clear-guesses', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      
+      if (response.ok) {
+        await loadAdminData();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error clearing guesses:', error);
+      return false;
+    }
+  };
+
+  const deleteUser = async (userId) => {
+    try {
+      const response = await fetch('/api/delete-user', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+      
+      if (response.ok) {
+        await loadAdminData();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error deleting user:', error);
+      return false;
+    }
+  };
+
+  const deleteUserGuesses = async (userId) => {
+    try {
+      const response = await fetch('/api/delete-user-guesses', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId }),
+      });
+      
+      if (response.ok) {
+        await loadAdminData();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error deleting user guesses:', error);
+      return false;
+    }
+  };
+
+  const updatePaymentStatus = async (guessId, paymentStatus) => {
+    try {
+      const response = await fetch('/api/update-payment-status', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ guessId, paymentStatus }),
+      });
+      
+      if (response.ok) {
+        await loadAdminData();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error updating payment status:', error);
+      return false;
+    }
+  };
+
+  const renameUser = async (oldName, newName) => {
+    try {
+      const response = await fetch('/api/rename-user', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ oldName, newName }),
+      });
+      
+      if (response.ok) {
+        await loadAdminData();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error renaming user:', error);
+      return false;
+    }
+  };
+
+  const addMatch = async (matchData) => {
+    try {
+      const response = await fetch('/api/add-match', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(matchData),
+      });
+      
+      if (response.ok) {
+        await loadAdminData();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error adding match:', error);
+      return false;
+    }
+  };
+
+  const updateMatch = async (matchId, updates) => {
+    try {
+      const response = await fetch('/api/update-match', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ matchId, ...updates }),
+      });
+      
+      if (response.ok) {
+        await loadAdminData();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error updating match:', error);
+      return false;
+    }
+  };
+
+  const deleteMatch = async (matchId) => {
+    try {
+      const response = await fetch('/api/delete-match', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ matchId }),
+      });
+      
+      if (response.ok) {
+        await loadAdminData();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error deleting match:', error);
+      return false;
+    }
+  };
+
+  const updateGuess = async (guessId, updates) => {
+    try {
+      const response = await fetch('/api/update-guess', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ guessId, ...updates }),
+      });
+      
+      if (response.ok) {
+        await loadAdminData();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error updating guess:', error);
+      return false;
+    }
+  };
+
+  const deleteGuess = async (guessId) => {
+    try {
+      const response = await fetch('/api/delete-guess', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ guessId }),
+      });
+      
+      if (response.ok) {
+        await loadAdminData();
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error deleting guess:', error);
+      return false;
+    }
+  };
 
   return {
     // State
     isLoading,
     settings,
     tempAdminEmail,
-    setTempAdminEmail,
     matches,
     participants,
     leaderboard,
@@ -163,26 +393,40 @@ export const useAdminData = () => {
     guessesThisWeek,
     isRefreshing,
     sortWeek,
-    setSortWeek,
     sortAll,
-    setSortAll,
     cleanNewWeekMatches,
-    setCleanNewWeekMatches,
     countdownActiveLocal,
-    setCountdownActiveLocal,
     countdownDate,
-    setCountdownDate,
     countdownTime,
-    setCountdownTime,
     updateTimeout,
-    setUpdateTimeout,
     
-    // Functions
+    // Setters
+    setSortWeek,
+    setSortAll,
+    setCleanNewWeekMatches,
+    setCountdownActiveLocal,
+    setCountdownDate,
+    setCountdownTime,
+    setUpdateTimeout,
+    setTempAdminEmail,
+    
+    // Actions
     loadAdminData,
-    refreshAll,
-    resetLocalCache,
+    refreshData,
     updateSettings,
-    debouncedUpdateSettings,
-    showToast
+    updateCountdown,
+    updateAdminEmail,
+    createNewWeek,
+    clearAllMatches,
+    clearAllGuesses,
+    deleteUser,
+    deleteUserGuesses,
+    updatePaymentStatus,
+    renameUser,
+    addMatch,
+    updateMatch,
+    deleteMatch,
+    updateGuess,
+    deleteGuess
   };
 };
