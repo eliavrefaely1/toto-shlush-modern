@@ -180,7 +180,8 @@ export const calculateScore = (guesses: string[], results: string[]): { score: n
   const correct: boolean[] = [];
   
   for (let i = 0; i < guesses.length; i++) {
-    // רק אם יש תוצאה (לא ריק) והניחוש תואם לה - זה נכון
+    // אם אין תוצאה עדיין, הניחוש לא נכון (0 נקודות)
+    // אם יש תוצאה והניחוש תואם לה - זה נכון (1 נקודה)
     const isCorrect = !!(results[i] && results[i].trim() !== '' && guesses[i] === results[i]);
     correct.push(isCorrect);
     if (isCorrect) {
