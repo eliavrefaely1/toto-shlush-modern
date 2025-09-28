@@ -14,7 +14,7 @@ export interface WebSocketMessage {
 
 class WebSocketClient {
   private ws: WebSocket | null = null;
-  private url: string;
+  private url: string = '';
   private userId: string;
   private autoReconnect: boolean = true;
   private maxReconnectAttempts: number = 5;

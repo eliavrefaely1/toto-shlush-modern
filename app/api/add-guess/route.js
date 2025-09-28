@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { dataManager } from '../../../src/lib/data-manager';
-import { broadcastMessage, WEBSOCKET_EVENTS } from '../websocket/route';
+import { broadcastMessage, WEBSOCKET_EVENTS } from '../../../src/lib/websocket-server';
 
 export async function POST(request) {
   try {
