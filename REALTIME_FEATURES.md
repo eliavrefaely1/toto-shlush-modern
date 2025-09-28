@@ -2,7 +2,7 @@
 
 ## סקירה כללית
 
-הוספתי מערכת WebSocket מתקדמת למערכת טוטו שלוש המאפשרת עדכונים בזמן אמת לכל המשתמשים. המערכת כוללת:
+מערכת WebSocket מתקדמת למערכת טוטו שלוש המאפשרת עדכונים בזמן אמת לכל המשתמשים. המערכת כוללת:
 
 - **WebSocket Server** - שרת WebSocket עם ניהול חיבורים
 - **WebSocket Client** - לקוח WebSocket עם auto-reconnect
@@ -13,16 +13,18 @@
 ## רכיבים שנוספו
 
 ### 1. WebSocket Server (`/app/api/websocket/route.js`)
-- ניהול חיבורי WebSocket
+- ניהול חיבורי WebSocket מתקדם
 - Broadcast messages לכל המשתמשים
 - Ping/Pong לבדיקת חיבורים חיים
 - ניהול subscriptions לאירועים ספציפיים
+- Rate limiting למניעת spam
 
 ### 2. WebSocket Client (`/src/lib/websocket-client.ts`)
 - Singleton pattern לניהול חיבור יחיד
 - Auto-reconnect עם exponential backoff
 - Event handling מתקדם
 - Connection state management
+- Error handling מתקדם
 
 ### 3. React Hooks (`/src/hooks/useWebSocket.ts`)
 
@@ -87,6 +89,7 @@ const { notifications, maintenanceMode, dismissNotification } = useSystemNotific
 ### User Events
 - `user_joined` - משתמש חדש הצטרף
 - `user_left` - משתמש עזב
+- `user_updated` - פרטי משתמש עודכנו
 
 ### Guess Events
 - `guess_submitted` - ניחוש חדש נשלח
@@ -113,6 +116,7 @@ const { notifications, maintenanceMode, dismissNotification } = useSystemNotific
 ### System Events
 - `system_notification` - הודעת מערכת
 - `maintenance_mode` - מצב תחזוקה
+- `connection_status` - סטטוס חיבור
 
 ## אינטגרציה עם API
 
@@ -146,7 +150,7 @@ const { notifications, maintenanceMode, dismissNotification } = useSystemNotific
 ### Dependencies שנוספו
 ```json
 {
-  "ws": "^8.18.1",
+  "ws": "^8.18.3",
   "@types/ws": "^8.18.1",
   "socket.io": "^4.8.1",
   "socket.io-client": "^4.8.1"
@@ -155,6 +159,11 @@ const { notifications, maintenanceMode, dismissNotification } = useSystemNotific
 
 ### Environment Variables
 אין צורך במשתני סביבה נוספים - המערכת משתמשת באותו URL של האפליקציה.
+
+### הגדרות נוספות
+- **Port**: המערכת רצה על פורט 3001
+- **Protocol**: WebSocket עובד עם HTTP/HTTPS
+- **CORS**: מוגדר לתמיכה בכל הדומיין
 
 ## ביצועים
 
@@ -196,11 +205,12 @@ const { notifications, maintenanceMode, dismissNotification } = useSystemNotific
 - ✅ Connection state management
 
 ### Future Enhancements
-- 🔄 Real-time chat
-- 🔄 Live match updates
-- 🔄 Push notifications
+- 🔄 Real-time chat בין משתמשים
+- 🔄 Live match updates עם סטטיסטיקות
+- 🔄 Push notifications למכשירים ניידים
 - 🔄 Voice notifications
 - 🔄 Multi-tab synchronization
+- 🔄 Real-time analytics dashboard
 
 ## בעיות ידועות
 
@@ -214,7 +224,7 @@ const { notifications, maintenanceMode, dismissNotification } = useSystemNotific
 
 ## סיכום
 
-מערכת ה-WebSocket הוספה בהצלחה ומספקת:
+מערכת ה-WebSocket פועלת בהצלחה ומספקת:
 
 1. **Real-time Updates** - עדכונים מיידיים לכל המשתמשים
 2. **Better UX** - חוויית משתמש משופרת עם עדכונים חיים
@@ -222,5 +232,12 @@ const { notifications, maintenanceMode, dismissNotification } = useSystemNotific
 4. **Scalable Architecture** - ארכיטקטורה מודולרית וניתנת להרחבה
 5. **Error Handling** - טיפול בשגיאות מתקדם
 6. **Performance Optimized** - ביצועים מיטביים עם cleanup אוטומטי
+7. **Rate Limiting** - הגנה מפני spam ועמוס יתר
+8. **Monitoring Integration** - אינטגרציה עם מערכת המעקב
 
 המערכת מוכנה לשימוש ופועלת עם כל התכונות הקיימות של טוטו שלוש! 🚀
+
+---
+
+**עדכון אחרון**: דצמבר 2024  
+**סטטוס**: פעיל ופועל

@@ -2,7 +2,7 @@
 
 ## סקירה כללית
 
-מערכת הגיבויים מאפשרת לך ליצור גיבויים אוטומטיים וידניים של כל הנתונים במערכת, ולשחזר אותם במידת הצורך.
+מערכת הגיבויים המתקדמת מאפשרת לך ליצור גיבויים אוטומטיים וידניים של כל הנתונים במערכת, לשחזר אותם במידת הצורך, ולשלוח אותם למייל אוטומטית.
 
 ## תכונות המערכת
 
@@ -18,10 +18,11 @@
 - **תיקייה ייחודית**: `backup-YYYY-MM-DDTHH-MM-SS-sssZ`
 
 ### 📊 נתונים שנשמרים
-- נתונים ראשיים (matches, users, userGuesses)
-- נתוני מטא (הגדרות מערכת)
-- נתוני משתמשים
-- נתונים לפי שבועות (1-10)
+- **נתונים ראשיים**: משחקים, משתמשים, ניחושים
+- **נתוני מטא**: הגדרות מערכת, גרסה, זמן שינוי אחרון
+- **נתוני משתמשים**: פרטים אישיים, סטטוס תשלום
+- **נתונים לפי שבועות**: ניחושים ומשחקים לכל שבוע (1-10)
+- **סטטיסטיקות**: מספר גיבויים, גודל נתונים
 
 ## שיטות שימוש
 
@@ -29,7 +30,7 @@
 
 #### גישה למנהל הגיבויים:
 ```
-http://localhost:3000/backup-manager
+http://localhost:3001/backup-manager
 ```
 
 #### פעולות זמינות:
@@ -42,17 +43,17 @@ http://localhost:3000/backup-manager
 
 #### יצירת גיבוי:
 ```bash
-curl -X GET "http://localhost:3000/api/backup?action=create"
+curl -X GET "http://localhost:3001/api/backup?action=create"
 ```
 
 #### רשימת גיבויים:
 ```bash
-curl -X GET "http://localhost:3000/api/backup?action=list"
+curl -X GET "http://localhost:3001/api/backup?action=list"
 ```
 
 #### שחזור מגיבוי:
 ```bash
-curl -X POST "http://localhost:3000/api/backup" \
+curl -X POST "http://localhost:3001/api/backup" \
   -H "Content-Type: application/json" \
   -H "x-admin-token: YOUR_ADMIN_TOKEN" \
   -d '{
@@ -63,7 +64,7 @@ curl -X POST "http://localhost:3000/api/backup" \
 
 #### מחיקת גיבוי:
 ```bash
-curl -X POST "http://localhost:3000/api/backup" \
+curl -X POST "http://localhost:3001/api/backup" \
   -H "Content-Type: application/json" \
   -H "x-admin-token: YOUR_ADMIN_TOKEN" \
   -d '{
@@ -97,7 +98,7 @@ node scripts/backup-manager.js restore
 
 #### מחיקת גיבוי:
 ```bash
-node scripts/backup-manager.js restore
+node scripts/backup-manager.js delete
 ```
 
 #### עזרה:
@@ -133,8 +134,17 @@ node scripts/backup-manager.js help
 # הגדרת משתנה סביבה
 export ADMIN_TOKEN="your-secret-token"
 
-# או בקובץ .env
+# או בקובץ .env.local
 ADMIN_TOKEN=your-secret-token
+```
+
+### 📧 שליחת מיילים אוטומטית
+המערכת יכולה לשלוח גיבויים למייל אוטומטית:
+
+```bash
+# הגדרת משתני סביבה
+RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+ADMIN_EMAIL=your-email@example.com
 ```
 
 ### 📁 מיקום גיבויים
@@ -143,7 +153,7 @@ ADMIN_TOKEN=your-secret-token
 
 ### ⏰ תדירות גיבוי אוטומטי
 - **ברירת מחדל**: כל 5 דקות
-- **שינוי תדירות**: ערוך את `_backupInterval` ב-`app/lib/data.js`
+- **שינוי תדירות**: ערוך את `_backupInterval` ב-`src/lib/data-manager.ts`
 
 ## פתרון בעיות
 
@@ -164,7 +174,7 @@ ADMIN_TOKEN=your-secret-token
 ### 🔍 בדיקת תקינות
 ```bash
 # בדיקת חיבור ל-API
-curl -X GET "http://localhost:3000/api/backup?action=list"
+curl -X GET "http://localhost:3001/api/backup?action=list"
 
 # בדיקת גיבוי ספציפי
 ls -la ./backups/backup-YYYY-MM-DDTHH-MM-SS-sssZ/
@@ -197,7 +207,7 @@ find ./backups/ -type d -name "backup-*" -mtime +30 -exec rm -rf {} \;
 ### 🔧 הגדרות מתקדמות
 להתאמות נוספות, ערוך את הקבצים:
 - `app/api/backup/route.js` - לוגיקת הגיבוי
-- `app/lib/data.js` - גיבוי אוטומטי
+- `src/lib/data-manager.ts` - גיבוי אוטומטי
 - `scripts/backup-manager.js` - סקריפט הטרמינל
 
 ---
