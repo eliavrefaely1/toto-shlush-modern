@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { dataManager } from '../../../src/lib/data-manager';
+import { broadcastMessage, WEBSOCKET_EVENTS } from '../websocket/route';
 
 export async function POST(request) {
   try {
@@ -42,7 +43,29 @@ export async function POST(request) {
     });
     
     console.log(`✅ API: Guess added successfully for user: ${name}`);
-    
+
+    // Broadcast real-time updates
+    try {
+      broadcastMessage(WEBSOCKET_EVENTS.GUESS_SUBMITTED, {
+        guess: result,
+        user: user
+      });
+
+      // Update leaderboard and pot
+      const leaderboard = await dataManager.getLeaderboard();
+      const pot = await dataManager.getPot();
+      
+      broadcastMessage(WEBSOCKET_EVENTS.LEADERBOARD_UPDATED, {
+        leaderboard
+      });
+      
+      broadcastMessage(WEBSOCKET_EVENTS.POT_UPDATED, {
+        pot
+      });
+    } catch (broadcastError) {
+      console.warn('Failed to broadcast updates:', broadcastError);
+    }
+
     return NextResponse.json({
       success: true,
       user: user,

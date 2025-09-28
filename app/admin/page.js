@@ -259,7 +259,7 @@ export default function AdminPage() {
       
       // טען את כל הנתונים מהשרת דרך API routes
       const [dataResponse, leaderboardResponse, potResponse] = await Promise.all([
-        fetch('/api/data?legacy=true'),
+        fetch('/api/data'),
         fetch('/api/leaderboard'),
         fetch('/api/pot')
       ]);

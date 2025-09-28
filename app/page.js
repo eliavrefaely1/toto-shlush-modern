@@ -32,7 +32,8 @@ export default function Home() {
         <main className="max-w-6xl mx-auto px-4 py-8 space-y-8">
           <CountdownTimer countdown={countdown} />
           
-          <LeaderboardPreview leaderboard={leaderboard} topScore={topScore} />
+                 {/* Leaderboard Preview */}
+                 <LeaderboardPreview leaderboard={leaderboard} />
           
           <MatchesPreview matchesByDay={matchesByDay} />
 

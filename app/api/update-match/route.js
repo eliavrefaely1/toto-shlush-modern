@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { dataManager } from '../../../src/lib/data-manager';
+import { broadcastMessage, WEBSOCKET_EVENTS } from '../websocket/route';
 
 export async function PUT(request) {
   try {
@@ -22,6 +23,28 @@ export async function PUT(request) {
       console.log('🔄 API: Calculating scores after result update...');
       await dataManager.calculateScores();
       console.log('✅ API: Scores calculated successfully');
+    }
+
+    // Broadcast real-time updates
+    try {
+      broadcastMessage(WEBSOCKET_EVENTS.MATCH_UPDATED, {
+        match: updatedMatch
+      });
+
+      if (field === 'result') {
+        // Update leaderboard after score calculation
+        const leaderboard = await dataManager.getLeaderboard();
+        broadcastMessage(WEBSOCKET_EVENTS.LEADERBOARD_UPDATED, {
+          leaderboard
+        });
+        
+        broadcastMessage(WEBSOCKET_EVENTS.SCORE_CALCULATED, {
+          matchId: matchId,
+          result: value
+        });
+      }
+    } catch (broadcastError) {
+      console.warn('Failed to broadcast updates:', broadcastError);
     }
 
     return NextResponse.json({
