@@ -16,7 +16,14 @@ export const useGuessData = () => {
     // טעינת משחקים מהשרת
     (async () => {
       try {
-        const response = await fetch('/api/data?legacy=true');
+        const response = await fetch('/api/data?legacy=true', { 
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        });
         const data = await response.json();
         setMatches(data.matches || []);
         setIsLocked(!!data.settings?.submissionsLocked);

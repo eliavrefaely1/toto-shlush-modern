@@ -53,9 +53,30 @@ export const useLeaderboardData = () => {
     try {
       // טען את כל הנתונים דרך API routes
       const [leaderboardResponse, matchesResponse, potResponse] = await Promise.all([
-        fetch('/api/leaderboard'),
-        fetch('/api/data?legacy=true'),
-        fetch('/api/pot')
+        fetch('/api/leaderboard', { 
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        }),
+        fetch('/api/data?legacy=true', { 
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        }),
+        fetch('/api/pot', { 
+          cache: 'no-store',
+          headers: {
+            'Cache-Control': 'no-cache, no-store, must-revalidate',
+            'Pragma': 'no-cache',
+            'Expires': '0'
+          }
+        })
       ]);
 
       const leaderboardData = await leaderboardResponse.json();

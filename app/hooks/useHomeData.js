@@ -131,9 +131,30 @@ export const useHomeData = () => {
       try {
         // השתמש ב-API routes כדי לקבל נתונים עדכניים מהשרת
         const [dataResponse, leaderboardResponse, potResponse] = await Promise.all([
-          fetch('/api/data?legacy=true', { cache: 'no-store' }),
-          fetch('/api/leaderboard', { cache: 'no-store' }),
-          fetch('/api/pot', { cache: 'no-store' })
+          fetch('/api/data?legacy=true', { 
+            cache: 'no-store',
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+              'Expires': '0'
+            }
+          }),
+          fetch('/api/leaderboard', { 
+            cache: 'no-store',
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+              'Expires': '0'
+            }
+          }),
+          fetch('/api/pot', { 
+            cache: 'no-store',
+            headers: {
+              'Cache-Control': 'no-cache, no-store, must-revalidate',
+              'Pragma': 'no-cache',
+              'Expires': '0'
+            }
+          })
         ]);
 
         const data = await dataResponse.json();
