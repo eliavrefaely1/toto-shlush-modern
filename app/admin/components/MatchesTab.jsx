@@ -10,8 +10,7 @@ const MatchesTab = ({
   updateMatch, 
   deleteMatch, 
   formatDateForInput,
-  formatDateDisplay,
-  restoreBackup
+  formatDateDisplay
 }) => {
   return (
     <div className="space-y-6">
@@ -43,23 +42,6 @@ const MatchesTab = ({
                 className="btn bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2"
               >
                 <Plus className="w-4 h-4" /> יצירת 16 משחקים ברירת מחדל
-              </button>
-              <button 
-                onClick={() => {
-                  // טעינת הגיבוי מהקובץ
-                  fetch('/restore_backup.json')
-                    .then(response => response.json())
-                    .then(backupData => {
-                      restoreBackup(backupData);
-                    })
-                    .catch(error => {
-                      console.error('Error loading backup:', error);
-                      alert('שגיאה בטעינת הגיבוי');
-                    });
-                }}
-                className="btn bg-green-600 hover:bg-green-700 text-white flex items-center gap-2"
-              >
-                <CheckCircle className="w-4 h-4" /> שחזור גיבוי אחרון
               </button>
               {matches.length > 0 && (
                 <div className="flex gap-2">

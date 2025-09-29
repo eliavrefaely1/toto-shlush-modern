@@ -323,7 +323,7 @@ export default function AdminPage() {
     if (password === '1234') {
       setIsAuthenticated(true);
     } else {
-      alert('סיסמה שגויה! הסיסמה הנכונה היא: 1234');
+      alert('סיסמה שגויה');
     }
   };
 
@@ -1007,7 +1007,6 @@ export default function AdminPage() {
               deleteMatch={deleteMatch}
               formatDateForInput={formatDateForInput}
               formatDateDisplay={formatDateDisplay}
-              restoreBackup={restoreBackup}
             />
           )}
           {activeTab === 'participants' && (
@@ -1038,12 +1037,12 @@ export default function AdminPage() {
             <BackupsTab 
               sendBackupToEmail={sendBackupToEmail}
               testEmailService={testEmailService}
-              resetLocalCache={resetLocalCache}
               isLoading={isLoading}
               settings={settings}
               tempAdminEmail={tempAdminEmail}
               setTempAdminEmail={setTempAdminEmail}
               updateSettings={updateSettings}
+              restoreBackup={restoreBackup}
               showToast={showToast}
             />
           )}

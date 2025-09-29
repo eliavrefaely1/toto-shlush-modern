@@ -1,17 +1,17 @@
 'use client';
 
-import { Database, Download, Upload, Mail, RefreshCw, Shield, Trash2, FileText } from 'lucide-react';
+import { Database, Download, Upload, Mail, RefreshCw, Shield, Trash2, FileText, CheckCircle, AlertTriangle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 const BackupsTab = ({ 
   sendBackupToEmail, 
   testEmailService, 
-  resetLocalCache, 
   isLoading,
   settings,
   tempAdminEmail,
   setTempAdminEmail,
   updateSettings,
+  restoreBackup,
   showToast
 }) => {
   const router = useRouter();
@@ -66,6 +66,21 @@ const BackupsTab = ({
               </ul>
             </div>
 
+            {/* סטטוס מייל */}
+            <div className="p-3 rounded border flex items-center gap-2 text-sm ${settings.adminEmail || tempAdminEmail ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}">
+              {settings.adminEmail || tempAdminEmail ? (
+                <>
+                  <CheckCircle className="w-4 h-4" />
+                  כתובת מייל מוגדרת: {(settings.adminEmail || tempAdminEmail)}
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="w-4 h-4" />
+                  לא הוגדרה כתובת מייל לגיבויים
+                </>
+              )}
+            </div>
+
             {/* כפתורי פעולה */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <button 
@@ -109,29 +124,31 @@ const BackupsTab = ({
         </div>
       </div>
 
-      {/* ניהול נתונים */}
+      {/* שחזור מגיבוי JSON */}
       <div className="card shadow-lg">
         <div className="card-header bg-gradient-to-r from-orange-50 to-orange-100">
-          <h2 className="text-xl font-bold text-orange-800">ניהול נתונים</h2>
-          <p className="text-gray-600">פעולות מתקדמות על הנתונים</p>
+          <h2 className="text-xl font-bold text-orange-800">שחזור מגיבוי JSON</h2>
+          <p className="text-gray-600">העלה קובץ גיבוי לשחזור מלא של המערכת</p>
         </div>
         <div className="card-content">
           <div className="space-y-4">
-            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
-              <h4 className="font-bold text-red-800 mb-2 flex items-center gap-2">
-                <Trash2 className="w-4 h-4" />
-                פעולות מסוכנות
-              </h4>
-              <p className="text-sm text-red-700 mb-3">
-                פעולות אלו עלולות למחוק נתונים לצמיתות. השתמש בזהירות!
-              </p>
-              <button 
-                onClick={resetLocalCache} 
-                className="btn btn-danger flex items-center gap-2 shadow-md hover:shadow-lg transition-shadow"
-              >
-                <RefreshCw className="w-4 h-4" /> אפס קאש מקומי
-              </button>
-            </div>
+            <input 
+              type="file" 
+              accept="application/json"
+              onChange={async (e) => {
+                const file = e.target.files && e.target.files[0];
+                if (!file) return;
+                try {
+                  const text = await file.text();
+                  const json = JSON.parse(text);
+                  await restoreBackup(json);
+                } catch (err) {
+                  console.error('Restore JSON error:', err);
+                  showToast('שגיאה בקריאת קובץ הגיבוי', 'error');
+                }
+              }}
+              className="input"
+            />
           </div>
         </div>
       </div>
