@@ -716,6 +716,9 @@ export default function AdminPage() {
       });
       if (response.ok) {
         // עדכן את ה-state ישירות במקום לטעון מחדש
+        setGuessesThisWeek(prev => prev.map(g =>
+          g.id === guessId ? { ...g, paymentStatus } : g
+        ));
         setLeaderboard(prev => prev.map(entry => 
           entry.id === guessId ? { ...entry, paymentStatus: paymentStatus } : entry
         ));
