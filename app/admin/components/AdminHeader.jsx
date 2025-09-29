@@ -1,11 +1,17 @@
 'use client';
 
 import { Shield, ArrowLeft, RefreshCw } from 'lucide-react';
+import Breadcrumbs from './Breadcrumbs';
+import SearchBar from './SearchBar';
 import { useRouter } from 'next/navigation';
 
 const AdminHeader = ({ 
   isRefreshing, 
-  refreshAll
+  refreshAll,
+  activeTab,
+  participants,
+  matches,
+  onSelectSearch
 }) => {
   const router = useRouter();
 
@@ -19,6 +25,9 @@ const AdminHeader = ({
           <h1 className="text-3xl font-bold text-blue-800">פאנל מנהל</h1>
         </div>
         <p className="text-lg text-blue-600">ניהול משחקים, תוצאות ומשתתפים</p>
+        <div className="mt-3 flex items-center justify-center">
+          <Breadcrumbs activeTab={activeTab} />
+        </div>
       </div>
       
       <div className="mb-6 flex items-center gap-3 flex-wrap justify-center">
@@ -37,6 +46,15 @@ const AdminHeader = ({
           <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} /> 
           {isRefreshing ? 'מרענן...' : 'רענן נתונים'}
         </button>
+        <SearchBar
+          placeholder="חפש משתמש/משחק…"
+          data={[
+            ...participants.map(u => ({ id: `user-${u.id}`, type: 'user', name: u.name, phone: u.phone })),
+            ...matches.map(m => ({ id: `match-${m.id}`, type: 'match', homeTeam: m.homeTeam, awayTeam: m.awayTeam }))
+          ]}
+          keys={['name','phone','homeTeam','awayTeam']}
+          onSelect={onSelectSearch}
+        />
       </div>
     </>
   );

@@ -92,6 +92,18 @@ export default function AdminPage() {
     setTimeout(() => setToast(null), 2500);
   };
 
+  // Dynamic document title by activeTab
+  useEffect(() => {
+    const titles = {
+      matches: 'מנהל · משחקים',
+      participants: 'מנהל · משתתפים',
+      users: 'מנהל · משתמשים',
+      backups: 'מנהל · גיבויים',
+      settings: 'מנהל · הגדרות'
+    }
+    document.title = titles[activeTab] || 'מנהל'
+  }, [activeTab])
+
   const refreshAll = async () => {
     setIsRefreshing(true);
     try {
@@ -994,6 +1006,18 @@ export default function AdminPage() {
           <AdminHeader 
             isRefreshing={isRefreshing}
             refreshAll={refreshAll}
+            activeTab={activeTab}
+            participants={participants}
+            matches={matches}
+            onSelectSearch={(item) => {
+              if (item.type === 'user') {
+                setActiveTab('users')
+                const el = document.querySelector(`[data-user-name="${item.name}"]`)
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+              } else if (item.type === 'match') {
+                setActiveTab('matches')
+              }
+            }}
           />
           
           <AdminTabs activeTab={activeTab} setActiveTab={setActiveTab} />
