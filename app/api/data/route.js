@@ -333,6 +333,7 @@ export async function GET(request) {
     const fieldsParam = searchParams.get('fields') || searchParams.get('only');
     const wanted = fieldsParam ? new Set(fieldsParam.split(',').map(s => s.trim())) : null;
     
+    await setupKV();
     const raw = (await kvInstance.get(KEY)) || defaultData;
     const meta = await kvInstance.get(META_KEY).catch(()=>null);
     const users = await kvInstance.get(USERS_KEY).catch(()=>null);

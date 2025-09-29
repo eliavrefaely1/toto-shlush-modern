@@ -29,13 +29,20 @@ export async function PUT(request) {
     logAdminAction('update', 'match', matchId, beforeMatch, updatedMatch, {
       field,
       value,
-      homeTeam: updatedMatch.homeTeam,
-      awayTeam: updatedMatch.awayTeam
+      homeTeam: updatedMatch?.homeTeam || 'Unknown',
+      awayTeam: updatedMatch?.awayTeam || 'Unknown'
     });
 
     if (field === 'result') {
       console.log('🔄 API: Calculating scores after result update...');
-      await dataManager.calculateScores();
+      // מצא את האינדקס של המשחק שהשתנה (מהנתונים שכבר טענו)
+      const matches = await dataManager.getMatches();
+      const matchIndex = matches.findIndex(m => m.id === matchId);
+      if (matchIndex !== -1) {
+        await dataManager.calculateScores(matchIndex);
+      } else {
+        await dataManager.calculateScores(); // fallback לחישוב מלא
+      }
       console.log('✅ API: Scores calculated successfully');
     }
 
@@ -46,10 +53,9 @@ export async function PUT(request) {
       });
 
       if (field === 'result') {
-        // Update leaderboard after score calculation
-        const leaderboard = await dataManager.getLeaderboard();
+        // שליחת עדכון leaderboard ללא טעינה מיותרת
         broadcastMessage(WEBSOCKET_EVENTS.LEADERBOARD_UPDATED, {
-          leaderboard
+          message: 'Leaderboard updated after match result change'
         });
         
         broadcastMessage(WEBSOCKET_EVENTS.SCORE_CALCULATED, {

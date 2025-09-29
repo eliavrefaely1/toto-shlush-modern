@@ -61,14 +61,65 @@ class DataManager {
     return `u_${Math.abs(h).toString(36)}`;
   }
 
-  // טעינת נתונים מהשרת בלבד - ללא שמירה מקומית
+  // טעינת נתונים ישירות מ-KV או דרך API
   async loadDataFromServer() {
     try {
-      const response = await fetch('/api/data', { cache: 'no-store' });
-      if (response.ok) {
-        const serverData = await response.json();
+      // אם אנחנו בסביבת שרת (API route), נטען ישירות מ-KV
+      if (typeof window === 'undefined') {
+        // Import setupKV function directly
+        const setupKV = async () => {
+          try {
+            // Try to use Vercel KV if available
+            const { kv } = await import('@vercel/kv');
+            await kv.get('test'); // Test if KV is working
+            return kv;
+          } catch (error) {
+            console.log('Vercel KV not available, using local mock');
+            const { kv: localKV } = await import('./local-kv.js');
+            return localKV;
+          }
+        };
+        
+        const kvInstance = await setupKV();
+        
+        const KEY = 'toto:data:v1';
+        const META_KEY = 'toto:meta:v1';
+        const USERS_KEY = 'toto:users:v1';
+        const MATCHES_KEY = (w) => `toto:week:${w}:matches:v1`;
+        const GUESSES_KEY = (w) => `toto:week:${w}:guesses:v1`;
+        
+        const raw = (await kvInstance.get(KEY)) || this.getDefaultData();
+        const meta = await kvInstance.get(META_KEY).catch(()=>null);
+        const users = await kvInstance.get(USERS_KEY).catch(()=>null);
+        const matches = await kvInstance.get(MATCHES_KEY(1)).catch(()=>null);
+        const guesses = await kvInstance.get(GUESSES_KEY(1)).catch(()=>null);
+
+        const serverData = {
+          users: Array.isArray(users) ? users : (Array.isArray(raw.users) ? raw.users : []),
+          matches: Array.isArray(matches) ? matches : (Array.isArray(raw.matches) ? raw.matches : []),
+          userGuesses: Array.isArray(guesses) ? guesses : (Array.isArray(raw.userGuesses) ? raw.userGuesses : []),
+          adminPassword: meta?.adminPassword ?? raw.adminPassword,
+          entryFee: meta?.entryFee ?? raw.entryFee,
+          totoFirstPrize: meta?.totoFirstPrize ?? raw.totoFirstPrize,
+          submissionsLocked: meta?.submissionsLocked ?? raw.submissionsLocked,
+          countdownActive: meta?.countdownActive ?? raw.countdownActive,
+          countdownTarget: meta?.countdownTarget ?? raw.countdownTarget,
+          adminEmail: raw.adminEmail || '',
+          pots: raw.pots || [],
+          deletedGuessKeys: raw.deletedGuessKeys || [],
+          deletedUsers: raw.deletedUsers || []
+        };
+        
         this.data = { ...this.getDefaultData(), ...serverData };
         return this.data;
+      } else {
+        // אם אנחנו בצד הלקוח, נשתמש ב-fetch
+        const response = await fetch('/api/data', { cache: 'no-store' });
+        if (response.ok) {
+          const serverData = await response.json();
+          this.data = { ...this.getDefaultData(), ...serverData };
+          return this.data;
+        }
       }
     } catch (error) {
       console.error('Failed to load data from server:', error);
@@ -77,22 +128,82 @@ class DataManager {
     return this.data;
   }
 
-  // שמירה בשרת בלבד - ללא שמירה מקומית
+  // שמירה ישירות ב-KV או דרך API
   async saveDataToServer(dataToSave, options = {}) {
     try {
-      const response = await fetch('/api/data', {
-        method: 'PUT',
-        headers: { 
-          'Content-Type': 'application/json',
-          ...(options.headers || {})
-        },
-        body: JSON.stringify(dataToSave)
-      });
-      
-      if (response.ok) {
-        // יצירת גיבוי אוטומטי לאחר שמירה מוצלחת
-        this.createAutoBackup('Data saved to server');
+      // אם אנחנו בסביבת שרת (API route), נשמור ישירות ב-KV
+      if (typeof window === 'undefined') {
+        // Import setupKV function directly
+        const setupKV = async () => {
+          try {
+            // Try to use Vercel KV if available
+            const { kv } = await import('@vercel/kv');
+            await kv.get('test'); // Test if KV is working
+            return kv;
+          } catch (error) {
+            console.log('Vercel KV not available, using local mock');
+            const { kv: localKV } = await import('./local-kv.js');
+            return localKV;
+          }
+        };
+        
+        const kvInstance = await setupKV();
+        
+        const KEY = 'toto:data:v1';
+        const META_KEY = 'toto:meta:v1';
+        const USERS_KEY = 'toto:users:v1';
+        const MATCHES_KEY = (w) => `toto:week:${w}:matches:v1`;
+        const GUESSES_KEY = (w) => `toto:week:${w}:guesses:v1`;
+        
+        // שמירת הטבלה הראשית
+        await kvInstance.set(KEY, dataToSave);
+        
+        // שמירת טבלאות מפוצלות
+        const metaToSave = {
+          adminPassword: dataToSave.adminPassword ?? this.getDefaultData().adminPassword,
+          entryFee: dataToSave.entryFee ?? this.getDefaultData().entryFee,
+          totoFirstPrize: dataToSave.totoFirstPrize ?? this.getDefaultData().totoFirstPrize,
+          submissionsLocked: !!dataToSave.submissionsLocked,
+          countdownActive: !!dataToSave.countdownActive,
+          countdownTarget: dataToSave.countdownTarget || ''
+        };
+        await kvInstance.set(META_KEY, metaToSave);
+        
+        if (Array.isArray(dataToSave.users)) {
+          await kvInstance.set(USERS_KEY, dataToSave.users);
+        }
+        
+        if (Array.isArray(dataToSave.matches)) {
+          await kvInstance.set(MATCHES_KEY(1), dataToSave.matches);
+        }
+        
+        if (Array.isArray(dataToSave.userGuesses)) {
+          await kvInstance.set(GUESSES_KEY(1), dataToSave.userGuesses);
+        }
+        
+        // יצירת גיבוי אוטומטי לאחר שמירה מוצלחת (רק אם זה לא עדכון משחק)
+        if (!options.skipBackup) {
+          this.createAutoBackup('Data saved to server');
+        }
         return true;
+      } else {
+        // אם אנחנו בצד הלקוח, נשתמש ב-fetch
+        const response = await fetch('/api/data', {
+          method: 'PUT',
+          headers: { 
+            'Content-Type': 'application/json',
+            ...(options.headers || {})
+          },
+          body: JSON.stringify(dataToSave)
+        });
+        
+        if (response.ok) {
+          // יצירת גיבוי אוטומטי לאחר שמירה מוצלחת (רק אם זה לא עדכון משחק)
+          if (!options.skipBackup) {
+            this.createAutoBackup('Data saved to server');
+          }
+          return true;
+        }
       }
     } catch (error) {
       console.error('Failed to save data to server:', error);
@@ -399,19 +510,27 @@ class DataManager {
   }
 
   async updateMatch(matchId, updates) {
-    const data = await this.loadDataFromServer();
-    const matchIndex = data.matches.findIndex(m => m.id === matchId);
-    if (matchIndex !== -1) {
-      const match = data.matches[matchIndex];
-      data.matches[matchIndex] = { ...data.matches[matchIndex], ...updates, updatedAt: new Date().toISOString() };
-      const success = await this.saveDataToServer(data);
-      if (success) {
-        const action = updates.result ? `תוצאה עודכנה: ${match.homeTeam} vs ${match.awayTeam} = ${updates.result}` : 'משחק עודכן';
-        this.createAutoBackup(`אדמין ${action}`);
+    try {
+      const data = await this.loadDataFromServer();
+      const matchIndex = data.matches.findIndex(m => m.id === matchId);
+      if (matchIndex !== -1) {
+        const match = data.matches[matchIndex];
+        data.matches[matchIndex] = { ...data.matches[matchIndex], ...updates, updatedAt: new Date().toISOString() };
+        const success = await this.saveDataToServer(data, { skipBackup: true });
+        if (success) {
+          const action = updates.result ? `תוצאה עודכנה: ${match.homeTeam} vs ${match.awayTeam} = ${updates.result}` : 'משחק עודכן';
+          // יצירת גיבוי אחד בלבד בסוף העדכון
+          this.createAutoBackup(`אדמין ${action}`);
+        }
+        return data.matches[matchIndex];
+      } else {
+        console.error(`Match with ID ${matchId} not found`);
+        throw new Error(`Match with ID ${matchId} not found`);
       }
-      return data.matches[matchIndex];
+    } catch (error) {
+      console.error('Error updating match:', error);
+      throw error;
     }
-    return null;
   }
 
   async deleteMatch(matchId) {
@@ -701,12 +820,45 @@ class DataManager {
     return before - after;
   }
 
-  // חישוב ניקוד
-  async calculateScores() {
+  // חישוב ניקוד - אופטימלי עם מפתח משחק ספציפי
+  async calculateScores(changedMatchIndex = null) {
     const matches = await this.getMatches();
-    const guesses = await this.getUserGuesses();
+    const data = await this.loadDataFromServer();
+    const guesses = data.userGuesses || [];
+    let hasChanges = false;
 
-    for (const guess of guesses) {
+    // אם יש משחק ספציפי שהשתנה, עדכן רק אותו
+    if (changedMatchIndex !== null) {
+      const updatedGuesses = guesses.map(guess => {
+        const oldScore = guess.score || 0;
+        let newScore = oldScore;
+        
+        // בדוק אם הניחוש למשחק הספציפי היה נכון לפני ואם הוא עדיין נכון
+        const oldCorrect = guess.correct && guess.correct[changedMatchIndex];
+        const newCorrect = matches[changedMatchIndex].result && guess.guesses[changedMatchIndex] === matches[changedMatchIndex].result;
+        
+        // עדכן ניקוד רק אם יש שינוי
+        if (oldCorrect !== newCorrect) {
+          newScore = oldCorrect ? oldScore - 1 : oldScore + 1;
+          const updatedCorrect = [...(guess.correct || [])];
+          updatedCorrect[changedMatchIndex] = newCorrect;
+          
+          hasChanges = true;
+          return { ...guess, score: newScore, correct: updatedCorrect, updatedAt: new Date().toISOString() };
+        }
+        return guess;
+      });
+
+      if (hasChanges) {
+        const updatedData = { ...data, userGuesses: updatedGuesses };
+        await this.saveDataToServer(updatedData, { skipBackup: true });
+      }
+      
+      return updatedGuesses;
+    }
+
+    // חישוב מלא לכל המשתמשים (רק אם לא צוין משחק ספציפי)
+    const updatedGuesses = guesses.map(guess => {
       let score = 0;
       const correctGuesses = [];
 
@@ -722,12 +874,21 @@ class DataManager {
         }
       });
 
+      // בדוק אם צריך עדכון
       if (guess.score !== score || !guess.correct) {
-        await this.updateUserGuess(guess.id, { score, correct: correctGuesses });
+        hasChanges = true;
+        return { ...guess, score, correct: correctGuesses, updatedAt: new Date().toISOString() };
       }
+      return guess;
+    });
+
+    // שמור את כל העדכונים בבת אחת אם יש שינויים
+    if (hasChanges) {
+      const updatedData = { ...data, userGuesses: updatedGuesses };
+      await this.saveDataToServer(updatedData, { skipBackup: true });
     }
 
-    return this.getUserGuesses();
+    return updatedGuesses;
   }
 
   // ניהול קופה
