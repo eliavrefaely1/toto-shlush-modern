@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { dataManager } from '../../lib/data';
 import { broadcastMessage, WEBSOCKET_EVENTS } from '../../../src/lib/websocket-server';
+import { logAdminAction } from '../../lib/event-logger';
 
 export async function PUT(request) {
   try {
@@ -16,8 +17,21 @@ export async function PUT(request) {
 
     await dataManager.initialize();
     console.log('💾 API: Updating match...');
+    
+    // Get the match before update for logging
+    const matches = await dataManager.getMatches();
+    const beforeMatch = matches.find(m => m.id === matchId);
+    
     const updatedMatch = await dataManager.updateMatch(matchId, { [field]: value });
     console.log('✅ API: Match updated successfully:', updatedMatch);
+
+    // Log the event
+    logAdminAction('update', 'match', matchId, beforeMatch, updatedMatch, {
+      field,
+      value,
+      homeTeam: updatedMatch.homeTeam,
+      awayTeam: updatedMatch.awayTeam
+    });
 
     if (field === 'result') {
       console.log('🔄 API: Calculating scores after result update...');

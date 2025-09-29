@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { dataManager } from '../../lib/data';
 import { broadcastMessage, WEBSOCKET_EVENTS } from '../../../src/lib/websocket-server';
+import { logUserAction } from '../../lib/event-logger';
 
 export async function POST(request) {
   try {
@@ -43,6 +44,13 @@ export async function POST(request) {
     });
     
     console.log(`✅ API: Guess added successfully for user: ${name}`);
+
+    // Log the event
+    logUserAction(name, 'create', 'guess', result.id, null, result, {
+      userId: user.id,
+      guessCount: guesses.filter(g => g && g.trim()).length,
+      isNewUser: !users.find(u => (u.name||'').toLowerCase().trim() === name.toLowerCase().trim())
+    });
 
     // Broadcast real-time updates
     try {

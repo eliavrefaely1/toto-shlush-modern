@@ -1,6 +1,6 @@
 'use client';
 
-import { Shield, Settings, Users, Trophy, Database, UserCheck } from 'lucide-react';
+import { Shield, Settings, Users, Trophy, Database, UserCheck, FileText } from 'lucide-react';
 
 const AdminTabs = ({ activeTab, setActiveTab }) => {
   const tabs = [
@@ -8,6 +8,7 @@ const AdminTabs = ({ activeTab, setActiveTab }) => {
     { id: 'participants', label: 'משתתפים', icon: UserCheck, description: 'ניהול משתתפים וניחושים' },
     { id: 'users', label: 'משתמשים', icon: Users, description: 'ניהול משתמשים' },
     { id: 'backups', label: 'גיבויים', icon: Database, description: 'ניהול גיבויים ונתונים' },
+    { id: 'logs', label: 'לוגים', icon: FileText, description: 'מעקב אירועים ופעולות' },
     { id: 'settings', label: 'הגדרות', icon: Settings, description: 'הגדרות מערכת' },
   ];
 

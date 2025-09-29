@@ -7,6 +7,7 @@ const TAB_LABELS = {
   participants: 'משתתפים',
   users: 'משתמשים',
   backups: 'גיבויים',
+  logs: 'לוגים',
   settings: 'הגדרות'
 }
 

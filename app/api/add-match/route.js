@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { dataManager } from '../../lib/data';
+import { logAdminAction } from '../../lib/event-logger';
 
 export async function POST(request) {
   try {
@@ -11,6 +12,13 @@ export async function POST(request) {
     console.log('💾 API: Adding match...');
     const newMatch = await dataManager.addMatch(body);
     console.log('✅ API: Match added successfully:', newMatch.id);
+
+    // Log the event
+    logAdminAction('create', 'match', newMatch.id, null, newMatch, {
+      homeTeam: newMatch.homeTeam,
+      awayTeam: newMatch.awayTeam,
+      category: newMatch.category
+    });
 
     return NextResponse.json({
       success: true,

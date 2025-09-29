@@ -14,6 +14,7 @@ import BackupsTab from './components/BackupsTab';
 import SettingsTab from './components/SettingsTab';
 import RenameUserModal from './components/RenameUserModal';
 import EditGuessModal from './components/EditGuessModal';
+import LogsTab from './components/LogsTab';
 
 // DataManager loaded successfully
 
@@ -99,6 +100,7 @@ export default function AdminPage() {
       participants: 'מנהל · משתתפים',
       users: 'מנהל · משתמשים',
       backups: 'מנהל · גיבויים',
+      logs: 'מנהל · לוגים',
       settings: 'מנהל · הגדרות'
     }
     document.title = titles[activeTab] || 'מנהל'
@@ -1092,6 +1094,10 @@ export default function AdminPage() {
               loadAdminData={loadAdminData}
               showToast={showToast}
             />
+          )}
+          
+          {activeTab === 'logs' && (
+            <LogsTab />
           )}
               </div>
 
