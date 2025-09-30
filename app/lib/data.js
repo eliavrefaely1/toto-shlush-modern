@@ -808,16 +808,16 @@ class DataManager {
   }
 
   async clearAllGuesses() {
-    const before = this.data.userGuesses.length;
+    const data = await this.loadDataFromServer();
+    const before = data.userGuesses.length;
     // סמן את כל מפתחות הניחושים למחיקה
-    (this.data.userGuesses || []).forEach(g => {
+    (data.userGuesses || []).forEach(g => {
       const key = `${(g.name||'').toLowerCase().trim()}`
-      if (!this.data.deletedGuessKeys.includes(key)) this.data.deletedGuessKeys.push(key)
+      if (!data.deletedGuessKeys.includes(key)) data.deletedGuessKeys.push(key)
     })
-    this.data.userGuesses = [];
-    const after = this.data.userGuesses.length;
-    if (after !== before) await this.saveDataToServer();
-    return before - after;
+    data.userGuesses = [];
+    await this.saveDataToServer(data);
+    return before;
   }
 
   // חישוב ניקוד - אופטימלי עם מפתח משחק ספציפי
