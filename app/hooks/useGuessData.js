@@ -129,6 +129,17 @@ export const useGuessData = () => {
     }
   };
 
+  const fillRandomGuesses = () => {
+    const options = ['1', 'X', '2'];
+    const randomGuesses = Array(16).fill('').map(() => 
+      options[Math.floor(Math.random() * options.length)]
+    );
+    setFormData(prev => ({
+      ...prev,
+      guesses: randomGuesses
+    }));
+  };
+
   // ניווט באמצעות החיצים במקלדת
   useEffect(() => {
     const onKey = (e) => {
@@ -157,6 +168,7 @@ export const useGuessData = () => {
     nextMatch,
     prevMatch,
     setCurrentMatchIndex,
-    getProgress
+    getProgress,
+    fillRandomGuesses
   };
 };

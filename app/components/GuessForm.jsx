@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowRight, ArrowLeft } from 'lucide-react';
+import { ArrowRight, ArrowLeft, Shuffle } from 'lucide-react';
 
 const GuessForm = ({ 
   matches, 
@@ -9,7 +9,8 @@ const GuessForm = ({
   handleGuessChange, 
   setCurrentMatchIndex,
   nextMatch,
-  prevMatch 
+  prevMatch,
+  fillRandomGuesses 
 }) => {
   if (matches.length === 0) return null;
 
@@ -73,6 +74,18 @@ const GuessForm = ({
               >
                 משחק הבא
                 <ArrowLeft className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* כפתור מילוי רנדומלי */}
+            <div className="mt-4 flex justify-center">
+              <button
+                type="button"
+                onClick={fillRandomGuesses}
+                className="btn bg-purple-500 hover:bg-purple-600 text-white flex items-center gap-2 shadow-md transition-all"
+              >
+                <Shuffle className="w-4 h-4" />
+                מילוי אוטומטי (רנדומלי)
               </button>
             </div>
           </div>

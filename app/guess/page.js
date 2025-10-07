@@ -20,7 +20,8 @@ export default function GuessPage() {
     handleSubmit,
     nextMatch,
     prevMatch,
-    setCurrentMatchIndex
+    setCurrentMatchIndex,
+    fillRandomGuesses
   } = useGuessData();
 
   if (showSuccess) {
@@ -47,6 +48,7 @@ export default function GuessPage() {
               setCurrentMatchIndex={setCurrentMatchIndex}
               nextMatch={nextMatch}
               prevMatch={prevMatch}
+              fillRandomGuesses={fillRandomGuesses}
             />
 
             <SubmitButton isSubmitting={isSubmitting} isLocked={isLocked} />
